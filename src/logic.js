@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 
-// --- SEUS DADOS REAIS ---
+// --- CONFIGURAÇÃO DE IDENTIDADE ÚNICA ---
 const IDENTIFICADORES_ESPECIAIS = {
   GABRIEL_MARQUES: ['gabrielscm2005@gmail.com', '21971576860', 'gabriel'], 
   GABI: ['gabiflutter@gmail.com', '21998409073', 'gabi'] 
@@ -52,11 +52,17 @@ export const lerPlanilha = async (file) => {
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
+        
+        // raw: false força datas a virem como texto
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+        
         const normalizedData = jsonData.map(row => {
           const newRow = {};
           Object.keys(row).forEach(key => {
-            const cleanKey = key.replace(/\r?\n|\r/g, " ").toUpperCase().trim();
+            // --- LIMPEZA EXTREMA PARA O DIA 22 ---
+            // Troca qualquer quebra de linha (\n) ou tabulação por espaço simples
+            // Remove espaços duplos
+            let cleanKey = key.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").toUpperCase().trim();
             newRow[cleanKey] = row[key];
           });
           return newRow;
@@ -76,9 +82,15 @@ export const gerarRascunho = (df, ministeriosAtivos = ['PRODUÇÃO', 'FILMAGEM',
   
   const sampleRow = df[0];
   
-  // Radar de Datas
-  const colunasDatas = Object.keys(sampleRow).filter(col => /\d{1,2}\/\d{1,2}/.test(col));
+  // --- RADAR DE DATAS 2.0 ---
+  // Procura por DD/MM ou D/M no meio de qualquer texto
+  // Ex: "22/12 SEGUNDA..." vai dar match
+  const colunasDatas = Object.keys(sampleRow).filter(col => {
+      // Regex busca: digito(s) + barra + digito(s)
+      return /\d{1,2}\s*\/\s*\d{1,2}/.test(col);
+  });
 
+  // Se mesmo assim não achar, tenta pegar tudo que NÃO é dado pessoal
   if (colunasDatas.length === 0) {
       const colunasIgnorar = ['CARIMBO', 'E-MAIL', 'CELULAR', 'WHATSAPP', 'NOME', 'ÁREA', 'ID', 'OBSERVAÇÕES'];
       const fallbackCols = Object.keys(sampleRow).filter(col => !colunasIgnorar.some(ig => col.includes(ig)));
@@ -101,13 +113,23 @@ export const gerarRascunho = (df, ministeriosAtivos = ['PRODUÇÃO', 'FILMAGEM',
   const ORDEM_HIERARQUIA = ['PRODUÇÃO', 'FILMAGEM', 'PROJEÇÃO', 'TAKE', 'ILUMINAÇÃO'];
 
   colunasDatas.forEach(colunaData => {
+    // Busca quem marcou SIM (flexível)
     const diaDf = df.filter(row => {
         const val = String(row[colunaData] || "").toUpperCase().trim();
-        return val === 'SIM' || val === 'S' || val === 'YES';
+        return val === 'SIM' || val === 'S' || val === 'YES' || val.includes('SIM');
     });
     
-    const dailyFullList = {}; 
+    // Lista 'TODOS' para o Dropdown
+    const todosDoDia = new Set();
+    diaDf.forEach(row => {
+      const nomeIdentificado = identificarPessoa(row);
+      if (nomeIdentificado) todosDoDia.add(nomeIdentificado);
+    });
+    availableServersPerDay[colunaData] = { 'TODOS': [...todosDoDia].sort() };
+
+    // Automação
     const dailyAutoPool = {}; 
+    const dailyFullList = {}; 
 
     Object.keys(numServidoresPorArea).forEach(areaKey => {
       const servidoresAreaAuto = [];
@@ -139,12 +161,13 @@ export const gerarRascunho = (df, ministeriosAtivos = ['PRODUÇÃO', 'FILMAGEM',
       dailyFullList[areaKey] = [...new Set(servidoresAreaFull)].sort();
     });
 
-    availableServersPerDay[colunaData] = dailyFullList;
+    availableServersPerDay[colunaData] = { ...availableServersPerDay[colunaData], ...dailyFullList };
     
     const allocatedForDay = new Set();
     const areaCounters = {};
     Object.keys(numServidoresPorArea).forEach(k => areaCounters[k] = 0);
 
+    // Casal
     let casalAtivo = false;
     let gabrielArea = null; 
     const gabrielInProd = dailyAutoPool['PRODUÇÃO']?.includes(GABRIEL);
@@ -160,6 +183,7 @@ export const gerarRascunho = (df, ministeriosAtivos = ['PRODUÇÃO', 'FILMAGEM',
         shiftsCount[GABI] = (shiftsCount[GABI] || 0) + 1;
     }
 
+    // Alocação
     ORDEM_HIERARQUIA.forEach(area => {
         if (!numServidoresPorArea[area]) return; 
 
