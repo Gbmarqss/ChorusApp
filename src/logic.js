@@ -53,13 +53,13 @@ export const lerPlanilha = async (file) => {
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         
-        // raw: false garante que datas venham formatadas como texto
+        // raw: false força tudo como texto (evita datas virarem números como 45201)
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false });
         
         const normalizedData = jsonData.map(row => {
           const newRow = {};
           Object.keys(row).forEach(key => {
-            // Remove quebras de linha que escondiam o dia 22 e padroniza
+            // Limpa o nome da coluna (remove quebras de linha e espaços duplos)
             const cleanKey = key.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").toUpperCase().trim();
             newRow[cleanKey] = row[key];
           });
@@ -78,24 +78,32 @@ export const lerPlanilha = async (file) => {
 export const gerarRascunho = (df, ministeriosAtivos = ['PRODUÇÃO', 'FILMAGEM', 'PROJEÇÃO', 'TAKE', 'ILUMINAÇÃO']) => {
   if (!df || df.length === 0) return { error: "Planilha vazia." };
   
-  const sampleRow = df[0];
+  // --- MUDANÇA CRÍTICA: MAPEAMENTO DE TODAS AS COLUNAS ---
+  // Antes olhava só a primeira linha (df[0]). Agora olha TODAS para achar colunas raras.
+  const todasAsColunas = new Set();
+  df.forEach(row => {
+      Object.keys(row).forEach(key => todasAsColunas.add(key));
+  });
   
-  // --- LISTA DE EXCLUSÃO CORRIGIDA ---
-  // Removi "ÁREA" (que matava o dia 22 por ter "TODAS AS ÁREAS" no título)
-  // Usei "ÁREA DE ATUAÇÃO" que é o nome exato da coluna de dados
-  const colunasIgnorar = [
-    'CARIMBO', 
-    'ENDEREÇO DE E-MAIL', 'E-MAIL',
-    'CELULAR', 'WHATSAPP', 
-    'NOME', 
-    'ÁREA DE ATUAÇÃO', // <--- AQUI ESTAVA O ERRO (Antes era só "ÁREA")
-    'ID', 
-    'OBSERVAÇÕES'
-  ];
+  // Filtra as datas usando Radar (Regex DD/MM)
+  const colunasDatas = [...todasAsColunas].filter(col => /\d{1,2}\s*\/\s*\d{1,2}/.test(col));
 
-  // Filtra: Tudo que NÃO estiver na lista de ignorar é considerado DATA
-  const colunasDatas = Object.keys(sampleRow).filter(col => {
-      return !colunasIgnorar.some(ig => col.includes(ig));
+  // Fallback de segurança se não achar datas no formato padrão
+  if (colunasDatas.length === 0) {
+      const colunasIgnorar = ['CARIMBO', 'E-MAIL', 'CELULAR', 'WHATSAPP', 'NOME', 'ÁREA', 'ID', 'OBSERVAÇÕES'];
+      const fallbackCols = [...todasAsColunas].filter(col => !colunasIgnorar.some(ig => col.includes(ig)));
+      if (fallbackCols.length > 0) colunasDatas.push(...fallbackCols);
+  }
+
+  // Ordena as datas para não ficarem bagunçadas (ex: dia 22 aparecer antes do dia 5)
+  // Tenta extrair o dia/mês para ordenar cronologicamente
+  colunasDatas.sort((a, b) => {
+      const getNum = (str) => {
+          const match = str.match(/(\d{1,2})\/(\d{1,2})/);
+          if (!match) return 99999;
+          return parseInt(match[2]) * 100 + parseInt(match[1]); // Mês * 100 + Dia
+      };
+      return getNum(a) - getNum(b);
   });
 
   const numServidoresPorArea = {};
@@ -120,7 +128,7 @@ export const gerarRascunho = (df, ministeriosAtivos = ['PRODUÇÃO', 'FILMAGEM',
         return val === 'SIM' || val === 'S' || val === 'YES' || val.includes('SIM');
     });
     
-    // Lista 'TODOS' para o Dropdown (Sem filtro de área)
+    // Lista 'TODOS'
     const todosDoDia = new Set();
     diaDf.forEach(row => {
       const nomeIdentificado = identificarPessoa(row);
@@ -128,7 +136,7 @@ export const gerarRascunho = (df, ministeriosAtivos = ['PRODUÇÃO', 'FILMAGEM',
     });
     availableServersPerDay[colunaData] = { 'TODOS': [...todosDoDia].sort() };
 
-    // Automação (Robô)
+    // Listas do Robô
     const dailyAutoPool = {}; 
     const dailyFullList = {}; 
 
