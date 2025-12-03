@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 
-// --- CONFIGURAÇÃO DE IDENTIDADE ÚNICA ---
+// --- SEUS DADOS REAIS ---
 const IDENTIFICADORES_ESPECIAIS = {
   GABRIEL_MARQUES: ['gabrielscm2005@gmail.com', '21971576860', 'gabriel'], 
   GABI: ['gabiflutter@gmail.com', '21998409073', 'gabi'] 
@@ -53,16 +53,14 @@ export const lerPlanilha = async (file) => {
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         
-        // raw: false força datas a virem como texto
+        // raw: false garante que datas venham formatadas como texto
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false });
         
         const normalizedData = jsonData.map(row => {
           const newRow = {};
           Object.keys(row).forEach(key => {
-            // --- LIMPEZA EXTREMA PARA O DIA 22 ---
-            // Troca qualquer quebra de linha (\n) ou tabulação por espaço simples
-            // Remove espaços duplos
-            let cleanKey = key.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").toUpperCase().trim();
+            // Remove quebras de linha que escondiam o dia 22 e padroniza
+            const cleanKey = key.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").toUpperCase().trim();
             newRow[cleanKey] = row[key];
           });
           return newRow;
@@ -82,20 +80,23 @@ export const gerarRascunho = (df, ministeriosAtivos = ['PRODUÇÃO', 'FILMAGEM',
   
   const sampleRow = df[0];
   
-  // --- RADAR DE DATAS 2.0 ---
-  // Procura por DD/MM ou D/M no meio de qualquer texto
-  // Ex: "22/12 SEGUNDA..." vai dar match
-  const colunasDatas = Object.keys(sampleRow).filter(col => {
-      // Regex busca: digito(s) + barra + digito(s)
-      return /\d{1,2}\s*\/\s*\d{1,2}/.test(col);
-  });
+  // --- LISTA DE EXCLUSÃO CORRIGIDA ---
+  // Removi "ÁREA" (que matava o dia 22 por ter "TODAS AS ÁREAS" no título)
+  // Usei "ÁREA DE ATUAÇÃO" que é o nome exato da coluna de dados
+  const colunasIgnorar = [
+    'CARIMBO', 
+    'ENDEREÇO DE E-MAIL', 'E-MAIL',
+    'CELULAR', 'WHATSAPP', 
+    'NOME', 
+    'ÁREA DE ATUAÇÃO', // <--- AQUI ESTAVA O ERRO (Antes era só "ÁREA")
+    'ID', 
+    'OBSERVAÇÕES'
+  ];
 
-  // Se mesmo assim não achar, tenta pegar tudo que NÃO é dado pessoal
-  if (colunasDatas.length === 0) {
-      const colunasIgnorar = ['CARIMBO', 'E-MAIL', 'CELULAR', 'WHATSAPP', 'NOME', 'ÁREA', 'ID', 'OBSERVAÇÕES'];
-      const fallbackCols = Object.keys(sampleRow).filter(col => !colunasIgnorar.some(ig => col.includes(ig)));
-      if (fallbackCols.length > 0) colunasDatas.push(...fallbackCols);
-  }
+  // Filtra: Tudo que NÃO estiver na lista de ignorar é considerado DATA
+  const colunasDatas = Object.keys(sampleRow).filter(col => {
+      return !colunasIgnorar.some(ig => col.includes(ig));
+  });
 
   const numServidoresPorArea = {};
   ministeriosAtivos.forEach(min => {
@@ -119,7 +120,7 @@ export const gerarRascunho = (df, ministeriosAtivos = ['PRODUÇÃO', 'FILMAGEM',
         return val === 'SIM' || val === 'S' || val === 'YES' || val.includes('SIM');
     });
     
-    // Lista 'TODOS' para o Dropdown
+    // Lista 'TODOS' para o Dropdown (Sem filtro de área)
     const todosDoDia = new Set();
     diaDf.forEach(row => {
       const nomeIdentificado = identificarPessoa(row);
@@ -127,7 +128,7 @@ export const gerarRascunho = (df, ministeriosAtivos = ['PRODUÇÃO', 'FILMAGEM',
     });
     availableServersPerDay[colunaData] = { 'TODOS': [...todosDoDia].sort() };
 
-    // Automação
+    // Automação (Robô)
     const dailyAutoPool = {}; 
     const dailyFullList = {}; 
 
