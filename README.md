@@ -1,10 +1,10 @@
-# 🗓️ WebShift
+# 🗓️ ChorusApp
 
-O **WebShift** é uma aplicação web moderna para **gestão inteligente de escalas de voluntários**. 
+O **ChorusApp** é uma aplicação web moderna para **gestão inteligente de escalas de voluntários**. 
 
 Desenvolvido para automatizar a criação de escalas complexas, ele utiliza algoritmos para alocar pessoas em funções como Produção, Filmagem, Take e Iluminação, respeitando limites de atuação e regras de disponibilidade.
 
-![WebShift Preview](./public/favicon.jpg)
+![ChorusApp Preview](./public/favicon.jpg)
 
 ## 🚀 Funcionalidades Principais
 
@@ -35,5 +35,5 @@ Tenha o [Node.js](https://nodejs.org/) instalado.
 
 1. **Clone o repositório:**
    ```bash
-   git clone [https://github.com/SEU-USUARIO/webshift.git](https://github.com/SEU-USUARIO/webshift.git)
+   git clone [https://github.com/SEU-USUARIO/webshift.git](https://github.com/SEU-USUARIO/ChorusApp.git)
    cd webshift
