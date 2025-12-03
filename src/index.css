@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* FORÇA O SITE A OCUPAR TUDO */
+:root, body, #root {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+/* Garante que o root seja um container flexível */
+#root {
+  display: flex;
+  flex-direction: column;
+}
