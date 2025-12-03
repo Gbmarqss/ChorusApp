@@ -3,37 +3,34 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 
-// Função para remover emojis do texto (PDF não suporta emojis nativamente)
+// --- FAXINEIRO DE TEXTO ---
+// Remove emojis apenas para o PDF (porque emojis quebram o PDF)
 const cleanTextForPDF = (text) => {
   if (!text) return "";
   return text
-    .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '') // Remove emojis
-    .trim(); // Remove espaços extras
+    .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '') // Regex que caça emojis
+    .trim();
 };
 
 export const exportarPDF = (dados) => {
   const doc = new jsPDF();
   
-  // --- 1. CABEÇALHO DO DOCUMENTO (Visual Profissional) ---
-  // Faixa Azul no Topo
+  // Cabeçalho Azul Bonitão
   doc.setFillColor(63, 81, 181); // Azul Indigo
   doc.rect(0, 0, 210, 30, 'F'); 
   
-  // Título
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
-  doc.text("ESCALA WEBSHIFT", 105, 18, { align: 'center' }); // Centralizado
+  doc.text("ESCALA CHORUSAPP", 105, 18, { align: 'center' });
   
-  // Subtítulo (Data)
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  const dataGeracao = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-  doc.text(`Gerado em: ${dataGeracao}`, 105, 25, { align: 'center' });
+  doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, 105, 25, { align: 'center' });
 
-  // --- 2. AGRUPAR DADOS ---
+  // Agrupa os dados por dia para criar os cartões
   const dadosAgrupados = {};
-  const datasOrdenadas = [];
+  const datasOrdenadas = []; // Mantém a ordem cronológica
   
   dados.forEach(row => {
     if (!dadosAgrupados[row.Data]) {
@@ -43,32 +40,28 @@ export const exportarPDF = (dados) => {
     dadosAgrupados[row.Data].push(row);
   });
 
-  // --- 3. GERAR TABELAS POR DIA ---
-  let finalY = 40; // Começa após o cabeçalho azul
+  let finalY = 40; // Posição onde começa a primeira tabela
 
   datasOrdenadas.forEach((data) => {
     const itensDoDia = dadosAgrupados[data];
     
-    // Limpa o texto da data (Remove emojis que quebram o PDF)
-    const tituloData = cleanTextForPDF(data).toUpperCase();
-
-    // Verifica espaço na página
+    // Se não couber na página, cria uma nova
     if (finalY > 250) {
       doc.addPage();
       finalY = 20;
     }
 
-    // --- DESENHA O CARTÃO DO DIA ---
-    
-    // 1. Cabeçalho do Dia (Estilo Cartão)
+    // 1. Título do Dia (Sem Emojis para não bugar)
+    const tituloLimpo = cleanTextForPDF(data).toUpperCase();
+
     autoTable(doc, {
       startY: finalY,
-      head: [[tituloData]], // Texto limpo sem emoji
+      head: [[`📅 ${tituloLimpo}`]], // Adiciona um emoji seguro do sistema ou texto puro
       body: [],
       theme: 'plain',
       headStyles: {
         fillColor: [240, 242, 245], // Fundo Cinza Claro
-        textColor: [63, 81, 181],   // Texto Azul
+        textColor: [63, 81, 181],   // Azul
         fontSize: 11,
         fontStyle: 'bold',
         halign: 'left',
@@ -77,17 +70,14 @@ export const exportarPDF = (dados) => {
       margin: { left: 14, right: 14 },
     });
 
-    // 2. Corpo da Tabela (Lista de Voluntários)
-    const rows = itensDoDia.map(item => {
-      // Limpa emojis também dos nomes e funções se houver
-      const funcaoLimpa = cleanTextForPDF(item.Funcao).toUpperCase();
-      const voluntarioLimpo = cleanTextForPDF(item.Voluntario);
-      
-      return [funcaoLimpa, voluntarioLimpo];
-    });
+    // 2. Tabela de Pessoas (Sem Emojis)
+    const rows = itensDoDia.map(item => [
+      cleanTextForPDF(item.Funcao).toUpperCase(), 
+      cleanTextForPDF(item.Voluntario)
+    ]);
 
     autoTable(doc, {
-      startY: doc.lastAutoTable.finalY, // Cola na tabela de cima
+      startY: doc.lastAutoTable.finalY, // Cola logo abaixo do título
       body: rows,
       theme: 'grid',
       styles: {
@@ -98,31 +88,20 @@ export const exportarPDF = (dados) => {
         textColor: [50, 50, 50]
       },
       columnStyles: {
-        0: { 
-            fontStyle: 'bold', 
-            textColor: [100, 100, 100], // Cargo em cinza
-            cellWidth: 70 
-        }, 
-        1: { 
-            textColor: [0, 0, 0], // Nome em preto
-            fontStyle: 'normal'
-        }
+        0: { fontStyle: 'bold', textColor: [100, 100, 100], cellWidth: 70 }, // Coluna Função
+        1: { textColor: [0, 0, 0] } // Coluna Nome
       },
-      head: [], // Sem cabeçalho repetido
+      head: [], // Sem cabeçalho extra
       margin: { left: 14, right: 14 },
-      
-      // Zebra Striping (Linhas alternadas)
       didParseCell: function(data) {
-        if (data.row.index % 2 === 0) {
-          data.cell.styles.fillColor = [255, 255, 255];
-        } else {
-          data.cell.styles.fillColor = [252, 252, 253]; // Cinza quase imperceptível
-        }
+        // Zebra Striping (Linhas alternadas)
+        if (data.row.index % 2 === 0) data.cell.styles.fillColor = [255, 255, 255];
+        else data.cell.styles.fillColor = [252, 252, 253];
         
-        // Estiliza "Não designado"
+        // Estiliza "Não designado" em itálico/cinza
         if (data.row.raw[1] === "Não designado") {
             if (data.column.index === 1) {
-                data.cell.styles.textColor = [180, 180, 180]; // Cinza claro
+                data.cell.styles.textColor = [180, 180, 180];
                 data.cell.styles.fontStyle = 'italic';
             }
         }
@@ -133,21 +112,22 @@ export const exportarPDF = (dados) => {
     finalY = doc.lastAutoTable.finalY + 8;
   });
 
-  doc.save('escala_webshift.pdf');
+  doc.save('escala_chorusapp.pdf');
 };
 
 export const exportarExcel = (dados) => {
   const ws = XLSX.utils.json_to_sheet(dados);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Escala");
-  XLSX.writeFile(wb, "escala_webshift.xlsx");
+  XLSX.writeFile(wb, "escala_chorusapp.xlsx");
 };
 
 export const exportarICS = (dados) => {
-  let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//WebShift//App//PT\n";
+  let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ChorusApp//App//PT\n";
   dados.forEach(row => {
     if (row.Voluntario === "Não designado") return;
     
+    // Tenta achar data no formato DD/MM
     const match = row.Data.match(/(\d{1,2})\/(\d{1,2})/);
     if (!match) return;
 
@@ -155,12 +135,11 @@ export const exportarICS = (dados) => {
     const ano = new Date().getFullYear();
     const pad = (n) => n < 10 ? '0'+Number(n) : n;
     
-    // Ajuste simples de horário (pode ser refinado depois)
     const dtStart = `${ano}${pad(mes)}${pad(dia)}T190000`;
     const dtEnd = `${ano}${pad(mes)}${pad(dia)}T220000`;
 
     icsContent += "BEGIN:VEVENT\n";
-    icsContent += `SUMMARY:WebShift - ${row.Funcao}\n`;
+    icsContent += `SUMMARY:ChorusApp - ${row.Funcao}\n`;
     icsContent += `DESCRIPTION:Voluntário: ${row.Voluntario}\n`;
     icsContent += `DTSTART;TZID=America/Sao_Paulo:${dtStart}\n`;
     icsContent += `DTEND;TZID=America/Sao_Paulo:${dtEnd}\n`;
@@ -169,7 +148,7 @@ export const exportarICS = (dados) => {
   icsContent += "END:VCALENDAR";
   
   const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-  saveAs(blob, "escala_webshift.ics");
+  saveAs(blob, "escala_chorusapp.ics");
 };
 
 export const copiarWhatsApp = async (dados) => {
@@ -180,12 +159,12 @@ export const copiarWhatsApp = async (dados) => {
       return acc;
   }, {});
 
-  let texto = "*🗓️ ESCALA WEBSHIFT*\n\n";
+  let texto = "*🗓️ ESCALA CHORUSAPP*\n\n";
   
   Object.keys(agrupado).forEach(data => {
     texto += `*${data}*\n`;
     agrupado[data].forEach(row => {
-      // Aqui mantemos os emojis porque o WhatsApp suporta!
+      // MANTÉM OS EMOJIS AQUI (No Zap pode!)
       let icone = "👤";
       if (row.Funcao.includes("PRODUÇÃO")) icone = "🎬";
       if (row.Funcao.includes("Câmera") || row.Funcao.includes("FILMAGEM")) icone = "🎥";
