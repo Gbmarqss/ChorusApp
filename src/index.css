@@ -2,16 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
-/* FORÇA O SITE A OCUPAR TUDO */
-:root, body, #root {
+/* FORÇA O SITE A OCUPAR TUDO E TEMA NAVY GLOBAL */
+:root,
+body,
+#root {
   width: 100%;
   min-height: 100vh;
   margin: 0;
   padding: 0;
+  background-color: #020617;
+  /* Navy Blue Base */
+  color: white;
 }
 
 /* Garante que o root seja um container flexível */
 #root {
   display: flex;
   flex-direction: column;
+}
+
+/* Custom Scrollbar para combinar com o tema */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #020617;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
 }
