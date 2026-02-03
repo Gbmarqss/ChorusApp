@@ -8,6 +8,7 @@ export default function TeamManager({ team, onUpdate, onClose }) {
     const [formData, setFormData] = useState({ name: "", roles: [], email: "" });
 
     const [error, setError] = useState("");
+    const [deletingId, setDeletingId] = useState(null); // Confirmação visual de deleção
 
     const roles = Object.keys(MINISTERIOS_DEFAULT);
 
@@ -64,9 +65,8 @@ export default function TeamManager({ team, onUpdate, onClose }) {
     };
 
     const handleDelete = (id) => {
-        if (confirm("Tem certeza que deseja remover?")) {
-            onUpdate(team.filter(m => m.id !== id));
-        }
+        onUpdate(team.filter(m => m.id !== id));
+        setDeletingId(null);
     };
 
     const toggleRole = (role) => {
@@ -225,9 +225,26 @@ export default function TeamManager({ team, onUpdate, onClose }) {
                                                 <button onClick={() => handleEdit(member)} className="p-2 rounded-lg hover:bg-white/10 text-blue-400" title="Editar">
                                                     <Edit2 size={16} />
                                                 </button>
-                                                <button onClick={() => handleDelete(member.id)} className="p-2 rounded-lg hover:bg-red-900/30 text-red-500" title="Excluir">
-                                                    <Trash2 size={16} />
-                                                </button>
+                                                {deletingId === member.id ? (
+                                                    <div className="flex gap-1">
+                                                        <button
+                                                            onClick={() => handleDelete(member.id)}
+                                                            className="px-2 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold"
+                                                        >
+                                                            Sim
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setDeletingId(null)}
+                                                            className="px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold"
+                                                        >
+                                                            Não
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <button onClick={() => setDeletingId(member.id)} className="p-2 rounded-lg hover:bg-red-900/30 text-red-500" title="Excluir">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     );

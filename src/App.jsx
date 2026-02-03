@@ -1,10 +1,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Upload, FileSpreadsheet, Download, Share2, AlertTriangle, Moon, Sun, Search, Calendar, CheckCircle, XCircle, Lock, Flame, Filter, Menu, Link, Plus, X, Users, MessageSquare } from 'lucide-react';
-import { Routes, Route } from 'react-router-dom';
+import { Upload, FileSpreadsheet, Download, Share2, AlertTriangle, Moon, Sun, Search, Calendar, CheckCircle, XCircle, Lock, Flame, Filter, Menu, Link, Plus, X, Users, GitBranch } from 'lucide-react';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import Profile from './pages/Profile';
+import UsersPage from './pages/Users';
+import ScaleWizard from './pages/ScaleWizard';
+import PreScaleEditor from './pages/PreScaleEditor';
+import EditPublishedSchedule from './pages/EditPublishedSchedule';
+import PublicScheduleView from './pages/PublicScheduleView';
+import Ministries from './pages/Ministries';
+import History from './pages/History';
 import TeamManager from './TeamManager';
-import FormsManager from './FormsManager';
-import PublicForm from './PublicForm';
-import LandingPage from './LandingPage';
+import Home from './Home';
+import Layout from './components/Layout';
+import PreEscalaManager from './PreEscalaManager';
+import PublicPreEscala from './PublicPreEscala';
 import { lerPlanilha, gerarRascunho, MINISTERIOS_DEFAULT } from './logic';
 import { exportarPDF, exportarExcel, exportarICS, copiarWhatsApp } from './exportManager';
 import LZString from 'lz-string';
@@ -16,9 +30,8 @@ const normalizeText = (text) => {
 };
 
 function Dashboard() {
+  const location = useLocation();
 
-
-  const [hasStarted, setHasStarted] = useState(false);
   const [step, setStep] = useState(1);
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -38,10 +51,12 @@ function Dashboard() {
   const [showManualAddModal, setShowManualAddModal] = useState(false);
   const [novoNome, setNovoNome] = useState("");
   const [isEditing, setIsEditing] = useState(true);
+  const [exportFilter, setExportFilter] = useState(""); // Novo filtro de pessoa
+  const [showPreEscala, setShowPreEscala] = useState(false); // Novo: Modal de Pré-Escala
+  const [showNovaEscalaConfirm, setShowNovaEscalaConfirm] = useState(false); // Confirmação visual para Nova Escala
 
   // Team State - Lazy Initialization para garantir que carregue ANTES do primeiro efeito de salvar
   const [showTeamManager, setShowTeamManager] = useState(false);
-  const [showFormsManager, setShowFormsManager] = useState(false);
   const [team, setTeam] = useState(() => {
     const saved = localStorage.getItem('webshift-team');
     if (saved) return JSON.parse(saved);
@@ -61,6 +76,15 @@ function Dashboard() {
     if (savedDisponiveis) setDisponiveis(JSON.parse(savedDisponiveis));
     if (savedAdicionais) setAdicionaisManuais(JSON.parse(savedAdicionais));
   }, []);
+
+  // Auto-open TeamManager when accessing /equipe route
+  useEffect(() => {
+    if (location.pathname === '/equipe') {
+      setShowTeamManager(true);
+    }
+  }, [location.pathname]);
+
+  // Salva automaticamente no localStorage
   useEffect(() => {
     if (escala.length > 0) localStorage.setItem('webshift-escala', JSON.stringify(escala));
     if (Object.keys(disponiveis).length > 0) localStorage.setItem('webshift-disponiveis', JSON.stringify(disponiveis));
@@ -77,6 +101,9 @@ function Dashboard() {
     if (!file) return showToast("Selecione um arquivo!", "error");
     setLoading(true);
     try {
+      // Limpa pré-escala anterior ao gerar nova
+      localStorage.removeItem('chorus_pre_escala');
+
       const df = await lerPlanilha(file);
       const { rascunho, disponiveis: disp, error, warnings } = gerarRascunho(df, ministerios, team);
       if (error) throw new Error(error);
@@ -87,11 +114,9 @@ function Dashboard() {
       verificarConflitos(rascunho);
 
       if (warnings && warnings.length > 0) {
-        // Show warnings - simple implementation: just a toast for the first one or a summary
         showToast(`${warnings.length} correções automáticas aplicadas!`, "warning");
         console.warn("Generation Warnings:", warnings);
         setToast({ show: true, message: `${warnings.length} correções (veja console)`, type: 'warning' });
-        // You could also add a state to show these in a proper modal list
       } else {
         showToast("Escala gerada com sucesso!");
       }
@@ -103,7 +128,37 @@ function Dashboard() {
   };
   const copyShareLink = () => { if (escala.length === 0) return showToast("Gere uma escala primeiro!", "error"); const jsonString = JSON.stringify(escala); const compressed = LZString.compressToEncodedURIComponent(jsonString); const url = `${window.location.origin}/share?d=${compressed}`; navigator.clipboard.writeText(url).then(() => { showToast("Link copiado!", "success"); }); };
   const openExportModal = (type) => { if (conflitos.length > 0) return showToast("Resolva conflitos!", "error"); setExportType(type); setShowExportModal(true); };
-  const confirmExport = () => { const filtrada = escala.filter(slot => { let area = slot.AreaOriginal || 'OUTROS'; if (slot.Funcao.includes('Fotografo') || slot.Funcao.includes('Suporte')) area = 'TAKE'; if (slot.Funcao.includes('Filmagem') || slot.Funcao.includes('Câmera')) area = 'FILMAGEM'; if (slot.Funcao.includes('PRODUÇÃO')) area = 'PRODUÇÃO'; if (slot.Funcao.includes('PROJEÇÃO')) area = 'PROJEÇÃO'; if (slot.Funcao.includes('ILUMINAÇÃO')) area = 'ILUMINAÇÃO'; return ministeriosExportacao.includes(area); }); if (filtrada.length === 0) { showToast("Nada para exportar.", "error"); setShowExportModal(false); return; } if (exportType === 'pdf') exportarPDF(filtrada); if (exportType === 'excel') exportarExcel(filtrada); if (exportType === 'ics') exportarICS(filtrada); if (exportType === 'whatsapp') copiarWhatsApp(filtrada).then(() => showToast("Copiado!", "success")).catch(() => showToast("Erro", "error")); setShowExportModal(false); };
+  const confirmExport = () => {
+    // 1. Filtra por Ministerio
+    let filtrada = escala.filter(slot => {
+      let area = slot.AreaOriginal || 'OUTROS';
+      if (slot.Funcao.includes('Fotografo') || slot.Funcao.includes('Suporte')) area = 'TAKE';
+      if (slot.Funcao.includes('Filmagem') || slot.Funcao.includes('Câmera')) area = 'FILMAGEM';
+      if (slot.Funcao.includes('PRODUÇÃO')) area = 'PRODUÇÃO';
+      if (slot.Funcao.includes('PROJEÇÃO')) area = 'PROJEÇÃO';
+      if (slot.Funcao.includes('ILUMINAÇÃO')) area = 'ILUMINAÇÃO';
+      return ministeriosExportacao.includes(area);
+    });
+
+    // 2. Filtra por Pessoa
+    if (exportFilter) {
+      filtrada = filtrada.filter(slot => slot.Voluntario === exportFilter);
+    }
+
+    if (filtrada.length === 0) {
+      showToast("Nada para exportar com esses filtros.", "error");
+      // Não fecha o modal pra dar chance de mudar o filtro
+      return;
+    }
+
+    if (exportType === 'pdf') exportarPDF(filtrada);
+    if (exportType === 'excel') exportarExcel(filtrada);
+    if (exportType === 'ics') exportarICS(filtrada);
+    if (exportType === 'whatsapp') copyingToClipboard(filtrada);
+    setShowExportModal(false);
+  };
+
+  const copyingToClipboard = (data) => copiarWhatsApp(data).then(() => showToast("Copiado!", "success")).catch(() => showToast("Erro", "error"));
   const adicionarPessoaManual = () => { if (!novoNome.trim()) return; if (adicionaisManuais.includes(novoNome)) { showToast("Já existe!", "error"); return; } setAdicionaisManuais([...adicionaisManuais, novoNome]); setNovoNome(""); setShowManualAddModal(false); showToast("Adicionado!", "success"); };
   const verificarConflitos = (dados) => { const map = {}; const conflitos = []; dados.forEach(slot => { if (slot.Voluntario === "Não designado") return; const key = `${slot.Data}-${slot.Voluntario}`; if (map[key]) conflitos.push(key); else map[key] = true; }); setConflitos(conflitos); };
   const handleChangeVoluntario = (idx, val) => { const nova = [...escala]; nova[idx].Voluntario = val; setEscala(nova); verificarConflitos(nova); };
@@ -113,28 +168,11 @@ function Dashboard() {
   const bgClass = 'bg-[#020617] text-white'; // Navy Base
   const cardClass = 'bg-[#0f172a] border-blue-900/30 shadow-2xl'; // Navy Card
 
-  if (!hasStarted) {
-    return <LandingPage onStart={() => setHasStarted(true)} />;
-  }
+
 
   return (
     <div className={`w-full min-h-screen flex flex-col transition-colors duration-300 ${bgClass} font-sans`}>
-      <header className={`w-full px-4 md:px-8 py-3 shadow-md bg-[#020617]/90 border-blue-900/30 backdrop-blur-md flex justify-between items-center sticky top-0 z-50 border-b`}>
-        <div className="flex items-center gap-3">
-          {/* MUDANÇA: favicon.jpg */}
-          <img src="/favicon.jpg" alt="ChorusApp" className="w-9 h-9 md:w-10 md:h-10 object-contain drop-shadow-sm" />
-          <h1 className="text-xl md:text-2xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-700 dark:from-blue-400 dark:to-indigo-400">ChorusApp</h1>
-        </div>
-        {/* ... Resto do Header ... */}
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowFormsManager(true)} className={`p-2 rounded-full border transition-all flex items-center gap-2 px-3 bg-[#0f172a] border-blue-900/50 text-blue-200 hover:bg-blue-900/30`}>
-            <MessageSquare size={18} /> <span className="hidden md:inline text-sm font-bold">Solicitar</span>
-          </button>
-          <button onClick={() => setShowTeamManager(true)} className={`p-2 rounded-full border transition-all flex items-center gap-2 px-3 bg-[#0f172a] border-blue-900/50 text-blue-200 hover:bg-blue-900/30`}>
-            <Users size={18} /> <span className="hidden md:inline text-sm font-bold">Equipe</span>
-          </button>
-        </div>
-      </header>
+      {/* ... Resto do Main e Modais (igual ao anterior) ... */}
 
       {/* ... Resto do Main e Modais (igual ao anterior) ... */}
       <main className="flex-1 w-full px-3 md:px-8 py-6 max-w-[1920px] mx-auto">
@@ -166,14 +204,48 @@ function Dashboard() {
                   <ExportBtn icon={<FileSpreadsheet size={16} />} label="Excel" onClick={() => openExportModal('excel')} color="blue" />
                   <ExportBtn icon={<Calendar size={16} />} label="ICS" onClick={() => openExportModal('ics')} color="blue" />
                 </div>
+                <button
+                  onClick={() => setShowPreEscala(true)}
+                  className="px-3 py-2 rounded-lg text-xs font-bold bg-purple-900/20 text-purple-300 hover:bg-purple-900/40 transition-colors flex items-center gap-2 border border-purple-500/30"
+                  title="Abrir Pré-Escala para Aprovação Colaborativa"
+                >
+                  <GitBranch size={16} />
+                  <span className="hidden md:inline">Pré-Escala</span>
+                </button>
                 <ExportBtn icon={<Link size={16} />} label="Link" onClick={copyShareLink} color="purple" />
                 <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1 hidden md:block"></div>
-                <button onClick={() => {
-                  // Confirmação segura
-                  if (window.confirm("Deseja mesmo limpar tudo e começar do zero?")) {
-                    setStep(1); setFile(null); setEscala([]); localStorage.removeItem('webshift-escala');
-                  }
-                }} className="flex-1 md:flex-none px-4 py-2.5 text-sm font-bold text-red-500 bg-red-900/10 hover:bg-red-900/30 rounded-xl transition-colors whitespace-nowrap border border-red-900/30">Nova</button>
+                {!showNovaEscalaConfirm ? (
+                  <button
+                    onClick={() => setShowNovaEscalaConfirm(true)}
+                    className="flex-1 md:flex-none px-4 py-2.5 text-sm font-bold text-red-500 bg-red-900/10 hover:bg-red-900/30 rounded-xl transition-colors whitespace-nowrap border border-red-900/30"
+                  >
+                    Nova
+                  </button>
+                ) : (
+                  <div className="flex gap-2 items-center">
+                    <span className="text-xs text-orange-400 font-bold whitespace-nowrap">Limpar tudo?</span>
+                    <button
+                      onClick={() => {
+                        setStep(1);
+                        setFile(null);
+                        setEscala([]);
+                        localStorage.removeItem('webshift-escala');
+                        localStorage.removeItem('chorus_pre_escala');
+                        setShowNovaEscalaConfirm(false);
+                        showToast('Nova escala iniciada!', 'success');
+                      }}
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors"
+                    >
+                      Sim
+                    </button>
+                    <button
+                      onClick={() => setShowNovaEscalaConfirm(false)}
+                      className="px-3 py-1.5 text-xs font-bold text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                    >
+                      Não
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -225,7 +297,47 @@ function Dashboard() {
       </main>
 
       {showManualAddModal && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"><div className={`w-full max-w-sm p-6 rounded-3xl shadow-2xl bg-[#0f172a] border border-blue-900/30 animate-bounce-in`}><h3 className="text-xl font-bold mb-4 text-white">Adicionar Pessoa</h3><input type="text" placeholder="Nome" className={`w-full p-3 rounded-xl border mb-4 outline-none focus:ring-2 focus:ring-blue-500 bg-[#020617] border-blue-900/40 text-white`} value={novoNome} onChange={(e) => setNovoNome(e.target.value)} /><div className="flex gap-3"><button onClick={() => setShowManualAddModal(false)} className="flex-1 py-3 rounded-xl font-bold text-slate-400 hover:bg-white/5 transition-colors">Cancelar</button><button onClick={adicionarPessoaManual} className="flex-1 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700">Adicionar</button></div></div></div>}
-      {showExportModal && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"><div className={`w-full max-w-md p-6 rounded-3xl shadow-2xl bg-[#0f172a] border border-blue-900/30 animate-bounce-in`}><div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-white">Exportar</h3><button onClick={() => setShowExportModal(false)}><X size={24} className="text-slate-400 hover:text-white" /></button></div><div className="grid grid-cols-2 gap-3 mb-8">{Object.keys(MINISTERIOS_DEFAULT).map(min => (<label key={min} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${ministeriosExportacao.includes(min) ? 'bg-blue-900/30 border-blue-500 text-blue-200' : 'border-blue-900/20 text-slate-400 hover:border-blue-500/50'}`}><input type="checkbox" className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 bg-[#020617] border-blue-800" checked={ministeriosExportacao.includes(min)} onChange={(e) => { if (e.target.checked) setMinisteriosExportacao([...ministeriosExportacao, min]); else setMinisteriosExportacao(ministeriosExportacao.filter(m => m !== min)); }} /><span className="text-sm font-bold">{min}</span></label>))}</div><button onClick={confirmExport} className="w-full py-4 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30">Confirmar</button></div></div>}
+      {showExportModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-md p-6 rounded-3xl shadow-2xl bg-[#0f172a] border border-blue-900/30 animate-bounce-in`}>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-white">Exportar</h3>
+              <button onClick={() => setShowExportModal(false)}><X size={24} className="text-slate-400 hover:text-white" /></button>
+            </div>
+
+            {/* Volunteer Filter */}
+            <div className="mb-6">
+              <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-widest">Filtrar por Pessoa (Opcional)</label>
+              <select
+                value={exportFilter}
+                onChange={(e) => setExportFilter(e.target.value)}
+                className="w-full p-3 rounded-xl border bg-[#020617] border-blue-900/40 text-white outline-none focus:ring-2 focus:ring-blue-500 appearance-none font-medium cursor-pointer"
+              >
+                <option value="">Todos (Geral)</option>
+                {[...new Set(escala.map(s => s.Voluntario))].sort().filter(n => n !== "Não designado").map(vol => (
+                  <option key={vol} value={vol}>{vol}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="bg-[#020617]/50 p-4 rounded-xl border border-blue-900/20 mb-6">
+              <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-widest">Áreas</label>
+              <div className="grid grid-cols-2 gap-3">
+                {Object.keys(MINISTERIOS_DEFAULT).map(min => (
+                  <label key={min} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${ministeriosExportacao.includes(min) ? 'bg-blue-900/30 border-blue-500 text-blue-200' : 'border-blue-900/20 text-slate-400 hover:border-blue-500/50'}`}>
+                    <input type="checkbox" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 bg-[#020617] border-blue-800" checked={ministeriosExportacao.includes(min)} onChange={(e) => { if (e.target.checked) setMinisteriosExportacao([...ministeriosExportacao, min]); else setMinisteriosExportacao(ministeriosExportacao.filter(m => m !== min)); }} />
+                    <span className="text-[11px] font-bold">{min}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <button onClick={confirmExport} className="w-full py-4 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all transform hover:scale-[1.02]">
+              {exportFilter ? `Exportar para ${exportFilter.split(' ')[0]}` : 'Exportar Tudo'}
+            </button>
+          </div>
+        </div>
+      )}
       {toast.show && <div className={`fixed bottom-8 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-2xl font-bold animate-bounce-in z-[70] flex items-center gap-3 transition-all whitespace-nowrap border ${toast.type === 'error' ? 'bg-red-900/90 border-red-700 text-white' : 'bg-blue-900/90 border-blue-700 text-white'}`}>{toast.type === 'success' ? <CheckCircle size={20} /> : <Lock size={20} />}<span className="text-sm">{toast.message}</span></div>}
       <footer className="py-6 text-center text-xs text-slate-600 font-medium"><p>ChorusApp v{APP_VERSION} • {new Date().getFullYear()}</p></footer>
 
@@ -238,9 +350,17 @@ function Dashboard() {
         />
       )}
 
-      {showFormsManager && (
-        <FormsManager
-          onClose={() => setShowFormsManager(false)}
+      {showPreEscala && (
+        <PreEscalaManager
+          escala={escala}
+          disponiveis={disponiveis}
+          onClose={() => setShowPreEscala(false)}
+          onPublish={(escalaFinal) => {
+            showToast('Escala final publicada com sucesso!', 'success');
+            setShowPreEscala(false);
+            // Aqui você pode adicionar lógica adicional, como salvar no backend
+          }}
+          isDark={isDark}
         />
       )}
     </div>
@@ -259,12 +379,36 @@ const ExportBtn = ({ icon, label, onClick, color = 'blue' }) => {
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Dashboard />} />
-      <Route path="/responder" element={<PublicForm />} />
-      {/* Route de fallback para redirecionar para Home se não achar nada */}
-      <Route path="*" element={<Dashboard />} />
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        {/* Public routes - Auth */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+
+        {/* Public route - Shared pre-escala (no auth required) */}
+        <Route path="/pre-escala/:id" element={<PublicPreEscala />} />
+
+        {/* Public route - Final published schedule */}
+        <Route path="/public/:id" element={<PublicScheduleView />} />
+
+        {/* Protected routes - Require authentication */}
+        <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route path="/" element={<Home />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/wizard" element={<ProtectedRoute><ScaleWizard /></ProtectedRoute>} />
+          <Route path="/pre-scale/:id" element={<ProtectedRoute><PreScaleEditor /></ProtectedRoute>} />
+          <Route path="/schedules/:id/edit" element={<ProtectedRoute><EditPublishedSchedule /></ProtectedRoute>} />
+          <Route path="/public/:id" element={<PublicScheduleView />} />
+          <Route path="/ministries" element={<ProtectedRoute requireAdmin><Ministries /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/equipe" element={<ProtectedRoute requireAdmin><UsersPage /></ProtectedRoute>} />
+          <Route path="/historico" element={<History />} />
+          {/* Fallback */}
+          <Route path="*" element={<Home />} />
+        </Route>
+      </Routes>
+    </AuthProvider>
   );
 }
 

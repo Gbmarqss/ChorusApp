@@ -1,0 +1,699 @@
+A
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChurchFlow - Media Ministry Workflow</title>
+
+    <link id="dynamic-favicon" rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%2300DC82%22/><path d=%22M50 25v50M25 50h50%22 stroke=%22%23050505%22 stroke-width=%2212%22 stroke-linecap=%22round%22/></svg>">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            black: '#050505',
+                            dark: '#0A0A0A',
+                            card: '#111111',
+                            border: '#222222',
+                            neon: '#00DC82',
+                            neonHover: '#00bd6f',
+                            danger: '#FF4D4D',
+                            accent: '#3B82F6',
+                            windows: '#0078D7'
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #050505;
+            color: #ffffff;
+        }
+
+        .glow-effect {
+            background: radial-gradient(circle, rgba(0, 220, 130, 0.08) 0%, rgba(0, 0, 0, 0) 60%);
+        }
+
+        #termsModal {
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        #termsModal.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #termsModal:not(.hidden) {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        details>summary {
+            list-style: none;
+        }
+
+        details>summary::-webkit-details-marker {
+            display: none;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0A0A0A;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #222;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #333;
+        }
+    </style>
+</head>
+
+<body class="antialiased selection:bg-brand-neon selection:text-brand-black">
+
+    <nav class="fixed w-full z-40 bg-brand-black/80 backdrop-blur-md border-b border-brand-border">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div id="logo-container"
+                    class="w-8 h-8 bg-brand-neon rounded flex items-center justify-center text-brand-black font-bold shadow-[0_0_15px_rgba(0,220,130,0.3)] overflow-hidden">
+                    <i class="ph ph-cross"></i>
+                </div>
+                <span class="text-lg font-bold tracking-tight text-white font-mono">ChurchFlow_</span>
+            </div>
+
+            <div class="hidden md:flex items-center gap-8 text-sm text-gray-400 font-medium">
+                <a href="#problema" class="hover:text-white transition-colors" data-translate="nav_problem">O
+                    Problema</a>
+                <a href="#como-funciona" class="hover:text-white transition-colors"
+                    data-translate="nav_features">Funcionalidades</a>
+                <a href="#roadmap" class="hover:text-white transition-colors" data-translate="nav_roadmap">Roadmap</a>
+                <a href="#about" class="hover:text-white transition-colors" data-translate="nav_about">Sobre o Dev</a>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <button onclick="toggleLanguage()"
+                    class="text-xs font-mono border border-brand-border px-3 py-1.5 rounded text-gray-400 hover:border-gray-500 transition-all flex gap-2 cursor-pointer">
+                    <span id="lang-pt" class="text-white font-bold transition-colors">PT</span>
+                    <span class="text-gray-700">|</span>
+                    <span id="lang-en" class="text-gray-600 hover:text-white transition-colors">EN</span>
+                </button>
+
+                <a href="#download"
+                    class="bg-white text-black hover:bg-gray-200 px-4 py-2 rounded-lg font-bold text-sm transition-all hidden sm:block">
+                    <span data-translate="btn_download">Baixar Agora</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="pt-32 pb-20 px-6 relative overflow-hidden">
+        <div class="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
+
+            <div class="space-y-8 z-10 text-center lg:text-left">
+                <div
+                    class="inline-flex items-center gap-2 px-3 py-1 rounded border border-brand-border bg-brand-card/50 text-xs text-brand-neon font-mono mx-auto lg:mx-0">
+                    <span class="relative flex h-2 w-2">
+                        <span
+                            class="animate-pulse-slow absolute inline-flex h-full w-full rounded-full bg-brand-neon opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-brand-neon"></span>
+                    </span>
+                    v1.0 Stable Build
+                </div>
+
+                <h1 class="text-5xl md:text-6xl font-bold leading-tight tracking-tight">
+                    <span data-translate="hero_title_1">O Fim do Caos na</span> <br>
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-neon to-brand-accent"
+                        data-translate="hero_title_2">Mídia da Igreja.</span>
+                </h1>
+
+                <p class="text-lg text-gray-400 leading-relaxed max-w-lg mx-auto lg:mx-0" data-translate="hero_desc">
+                    Um sistema gratuito que organiza cultos automaticamente, padroniza arquivos e protege o trabalho dos
+                    voluntários. Sem burocracia.
+                </p>
+
+                <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                    <a href="#download"
+                        class="flex items-center justify-center gap-3 bg-brand-neon text-brand-black px-8 py-4 rounded-lg font-bold hover:bg-brand-neonHover transition-all shadow-[0_0_20px_rgba(0,220,130,0.2)]">
+                        <i class="ph ph-download-simple text-xl"></i>
+                        <span data-translate="hero_btn_primary">Download Win64</span>
+                    </a>
+                    <a href="https://github.com/Gbmarqss" target="_blank"
+                        class="flex items-center justify-center gap-3 px-8 py-4 rounded-lg font-bold text-white border border-brand-border hover:bg-brand-card transition-colors">
+                        <i class="ph ph-github-logo text-xl"></i> <span data-translate="btn_github_profile">Perfil
+                            GitHub</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="relative z-0 group px-2 lg:px-0">
+                <div class="absolute inset-0 glow-effect blur-3xl opacity-50"></div>
+                <div class="relative bg-brand-card border border-brand-border rounded-xl p-1 shadow-2xl">
+                    <div class="bg-black rounded-lg aspect-video flex flex-col relative overflow-hidden">
+                        <div
+                            class="h-8 bg-brand-border/30 w-full flex items-center px-4 gap-2 border-b border-brand-border/30">
+                            <div class="w-2.5 h-2.5 rounded-full bg-red-500/50"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-yellow-500/50"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-green-500/50"></div>
+                            <span class="ml-2 text-[10px] text-gray-500 font-mono">churchflow.exe</span>
+                        </div>
+                        <div class="p-8 flex items-center justify-center h-full">
+                            <div class="text-center space-y-4">
+                                <i class="ph ph-images-square text-6xl text-brand-border/50"></i>
+                                <p class="text-gray-600 font-mono text-xs uppercase tracking-widest">[ Screenshot
+                                    Placeholder ]</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="about" class="py-20 border-y border-brand-border bg-brand-card/20">
+        <div class="max-w-4xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row items-start md:items-center gap-8">
+
+                <div class="relative group mx-auto md:mx-0">
+                    <div
+                        class="absolute -inset-1 bg-gradient-to-r from-brand-neon to-blue-600 rounded-full blur opacity-25 group-hover:opacity-50 transition duration-1000">
+                    </div>
+                    <a href="https://github.com/Gbmarqss" target="_blank"
+                        class="relative w-24 h-24 rounded-full bg-brand-black border border-brand-border flex items-center justify-center overflow-hidden hover:scale-105 transition-transform">
+                        <i class="ph ph-github-logo text-5xl text-gray-300"></i>
+                    </a>
+                </div>
+
+                <div class="flex-1 space-y-4 text-center md:text-left">
+                    <div>
+                        <h3
+                            class="text-2xl font-bold text-white flex items-center justify-center md:justify-start gap-2">
+                            @Gbmarqss
+                            <a href="https://github.com/Gbmarqss" target="_blank"
+                                class="text-gray-500 hover:text-brand-neon transition-colors text-lg"><i
+                                    class="ph ph-arrow-square-out"></i></a>
+                        </h3>
+                        <p class="text-brand-neon font-mono text-sm">&lt;Python Developer /&gt;</p>
+                    </div>
+
+                    <p class="text-gray-400 leading-relaxed text-sm md:text-base max-w-2xl" data-translate="about_txt">
+                        Desenvolvedor focado em criar soluções reais para problemas reais. O <strong>ChurchFlow</strong>
+                        nasceu da necessidade de automatizar tarefas repetitivas no ministério, unindo Python e Design
+                        para facilitar a vida de voluntários.
+                    </p>
+
+                    <div class="flex flex-wrap gap-2 pt-2 justify-center md:justify-start">
+                        <span class="px-3 py-1 bg-brand-border rounded text-xs text-gray-300 font-mono">Python
+                            3.10+</span>
+                        <span
+                            class="px-3 py-1 bg-brand-border rounded text-xs text-gray-300 font-mono">Automation</span>
+                        <span class="px-3 py-1 bg-brand-border rounded text-xs text-gray-300 font-mono">Freeware</span>
+                    </div>
+                </div>
+
+                <div class="w-full md:w-auto mt-4 md:mt-0">
+                    <a href="#doacao"
+                        class="group flex items-center gap-3 px-5 py-3 rounded-lg border border-brand-border hover:border-brand-neon hover:bg-brand-neon/5 transition-all w-full md:w-auto justify-center">
+                        <i class="ph ph-coffee text-xl text-brand-neon group-hover:animate-bounce"></i>
+                        <div class="text-left">
+                            <span class="block text-xs text-gray-500 uppercase font-bold"
+                                data-translate="support_label">Apoie o Dev</span>
+                            <span class="block text-sm font-bold text-white" data-translate="support_action">Pagar um
+                                café</span>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="problema" class="py-24 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="grid md:grid-cols-3 gap-8">
+                <div
+                    class="bg-brand-card p-8 rounded-xl border border-brand-border hover:border-brand-danger/30 transition-colors">
+                    <i class="ph ph-warning-circle text-3xl text-brand-danger mb-4"></i>
+                    <h3 class="text-lg font-bold mb-2" data-translate="prob_1_title">Risco de Perda</h3>
+                    <p class="text-gray-500 text-sm leading-relaxed" data-translate="prob_1_desc">Voluntários esquecem
+                        de copiar arquivos ou deletam acidentalmente. Perder fotos de um evento importante é
+                        irreversível.</p>
+                </div>
+                <div
+                    class="bg-brand-card p-8 rounded-xl border border-brand-border hover:border-brand-danger/30 transition-colors">
+                    <i class="ph ph-folder-open text-3xl text-brand-danger mb-4"></i>
+                    <h3 class="text-lg font-bold mb-2" data-translate="prob_2_title">Desorganização</h3>
+                    <p class="text-gray-500 text-sm leading-relaxed" data-translate="prob_2_desc">Pastas com nomes
+                        errados, datas misturadas e cultos (Manhã/Noite) no mesmo diretório. Um caos para encontrar
+                        arquivos depois.</p>
+                </div>
+                <div
+                    class="bg-brand-card p-8 rounded-xl border border-brand-border hover:border-brand-danger/30 transition-colors">
+                    <i class="ph ph-clock text-3xl text-brand-danger mb-4"></i>
+                    <h3 class="text-lg font-bold mb-2" data-translate="prob_3_title">Trabalho Manual</h3>
+                    <p class="text-gray-500 text-sm leading-relaxed" data-translate="prob_3_desc">Renomear 500 fotos
+                        manualmente ou criar pastas toda semana consome tempo precioso da equipe de mídia.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="como-funciona" class="py-24 bg-brand-card/20 border-t border-brand-border px-6">
+        <div class="max-w-7xl mx-auto space-y-20">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-bold mb-4" data-translate="how_title">Workflow Inteligente</h2>
+                <p class="text-gray-400" data-translate="how_subtitle">A complexidade do Python escondida atrás de uma
+                    interface simples.</p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-12 relative">
+                <div
+                    class="hidden md:block absolute top-12 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-brand-border to-transparent">
+                </div>
+
+                <div class="relative text-center group">
+                    <div
+                        class="w-24 h-24 mx-auto bg-brand-black border-4 border-brand-card rounded-full flex items-center justify-center text-5xl text-brand-neon mb-6 relative z-10 transition-transform group-hover:scale-110">
+                        <i class="ph ph-scan"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Deep Scan</h3>
+                    <p class="text-gray-500 text-sm px-4" data-translate="step_1_desc">O sistema lê o EXIF das fotos e
+                        separa eventos automaticamente baseado no horário (ex: Culto Manhã vs Noite).</p>
+                </div>
+
+                <div class="relative text-center group">
+                    <div
+                        class="w-24 h-24 mx-auto bg-brand-black border-4 border-brand-card rounded-full flex items-center justify-center text-5xl text-brand-neon mb-6 relative z-10 transition-transform group-hover:scale-110">
+                        <i class="ph ph-check-square"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Visual Select</h3>
+                    <p class="text-gray-500 text-sm px-4" data-translate="step_2_desc">Interface de Cards. O voluntário
+                        vê o que já foi baixado (Verde) e o que é novo (Cinza). Zero confusão.</p>
+                </div>
+
+                <div class="relative text-center group">
+                    <div
+                        class="w-24 h-24 mx-auto bg-brand-black border-4 border-brand-card rounded-full flex items-center justify-center text-5xl text-brand-neon mb-6 relative z-10 transition-transform group-hover:scale-110">
+                        <i class="ph ph-hard-drives"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Auto Backup</h3>
+                    <p class="text-gray-500 text-sm px-4" data-translate="step_3_desc">Copia, renomeia a pasta no padrão
+                        correto (AAAA-MM-DD) e marca o cartão como "Concluído".</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="roadmap" class="py-24 px-6 border-t border-brand-border">
+        <div class="max-w-5xl mx-auto">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold mb-4" data-translate="roadmap_title">Roadmap de Desenvolvimento</h2>
+                <p class="text-gray-400" data-translate="roadmap_subtitle">Prioridades definidas para garantir segurança
+                    e performance.</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <div
+                    class="bg-brand-card p-6 rounded-xl border border-brand-border flex items-start gap-4 hover:border-brand-neon/50 transition-colors group">
+                    <div
+                        class="w-10 h-10 rounded-full bg-brand-neon/10 flex items-center justify-center text-brand-neon text-xl shrink-0 group-hover:scale-110 transition-transform">
+                        <i class="ph ph-hard-drives"></i>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex justify-between items-start">
+                            <h4 class="font-bold text-lg text-white mb-2" data-translate="road_1_title">SafeCopy
+                                (shutil)</h4>
+                            <span
+                                class="text-[10px] font-mono bg-brand-neon/20 text-brand-neon px-2 py-0.5 rounded border border-brand-neon/30">High
+                                Priority</span>
+                        </div>
+                        <p class="text-sm text-gray-500 leading-relaxed" data-translate="road_1_desc">Implementação
+                            robusta de cópia de arquivos para garantir que nenhum byte seja corrompido durante o backup.
+                        </p>
+                    </div>
+                </div>
+
+                <div
+                    class="bg-brand-card p-6 rounded-xl border border-brand-border flex items-start gap-4 hover:border-brand-neon/50 transition-colors group">
+                    <div
+                        class="w-10 h-10 rounded-full bg-brand-neon/10 flex items-center justify-center text-brand-neon text-xl shrink-0 group-hover:scale-110 transition-transform">
+                        <i class="ph ph-lightning"></i>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex justify-between items-start">
+                            <h4 class="font-bold text-lg text-white mb-2" data-translate="road_2_title">Turbo Thumbnails
+                            </h4>
+                            <span
+                                class="text-[10px] font-mono bg-brand-neon/20 text-brand-neon px-2 py-0.5 rounded border border-brand-neon/30">High
+                                Priority</span>
+                        </div>
+                        <p class="text-sm text-gray-500 leading-relaxed" data-translate="road_2_desc">Sistema de cache
+                            assíncrono para evitar travamentos ao carregar pastas com centenas de fotos pesadas.</p>
+                    </div>
+                </div>
+
+                <div
+                    class="bg-brand-card p-6 rounded-xl border border-brand-border flex items-start gap-4 hover:border-white/20 transition-colors group">
+                    <div
+                        class="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 text-xl shrink-0 group-hover:scale-110 transition-transform">
+                        <i class="ph ph-arrows-left-right"></i>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex justify-between items-start">
+                            <h4 class="font-bold text-lg text-white mb-2" data-translate="road_3_title">Modo Foco</h4>
+                            <span
+                                class="text-[10px] font-mono bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20">Planned</span>
+                        </div>
+                        <p class="text-sm text-gray-500 leading-relaxed" data-translate="road_3_desc">Navegação
+                            otimizada por teclado (Setas) para agilizar o processo de curadoria e seleção.</p>
+                    </div>
+                </div>
+
+                <div
+                    class="bg-brand-card p-6 rounded-xl border border-brand-border flex items-start gap-4 hover:border-white/20 transition-colors group">
+                    <div
+                        class="w-10 h-10 rounded-full bg-gray-700/30 flex items-center justify-center text-gray-400 text-xl shrink-0 group-hover:scale-110 transition-transform">
+                        <i class="ph ph-shield-check"></i>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex justify-between items-start">
+                            <h4 class="font-bold text-lg text-white mb-2" data-translate="road_4_title">Integrity Check
+                            </h4>
+                            <span
+                                class="text-[10px] font-mono bg-gray-800 text-gray-500 px-2 py-0.5 rounded border border-gray-700">Backlog</span>
+                        </div>
+                        <p class="text-sm text-gray-500 leading-relaxed" data-translate="road_4_desc">Verificação via
+                            Hash (Checksum) para segurança extra contra corrupção silenciosa de arquivos.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="doacao"
+        class="py-24 px-6 relative bg-gradient-to-b from-brand-black to-brand-card border-t border-brand-border text-center">
+        <div class="max-w-2xl mx-auto">
+            <h2 class="text-3xl font-bold mb-6" data-translate="donate_title">Contribua com o Projeto</h2>
+            <p class="text-gray-400 mb-10 text-sm leading-relaxed" data-translate="donate_desc">
+                O ChurchFlow é mantido por uma única pessoa. Sua doação ajuda a pagar custos de desenvolvimento e
+                garante que o software continue gratuito.
+            </p>
+
+            <div
+                class="bg-brand-black border border-brand-border p-8 rounded-2xl mb-16 shadow-2xl relative overflow-hidden group">
+                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <i class="ph ph-qr-code text-8xl text-brand-neon"></i>
+                </div>
+                <p class="text-xs text-gray-500 uppercase tracking-widest mb-4 font-bold">Pix Key (E-mail)</p>
+                <div class="flex items-center justify-center gap-4 mb-4">
+                    <code class="text-brand-neon font-mono text-lg md:text-xl">pix@churchflow.dev</code>
+                    <button class="text-gray-400 hover:text-white transition-colors" title="Copiar"><i
+                            class="ph ph-copy text-xl"></i></button>
+                </div>
+                <p class="text-xs text-gray-600" data-translate="donate_note">Todo valor é reinvestido no projeto.</p>
+            </div>
+
+            <div id="download" class="space-y-8">
+                <div>
+                    <button
+                        class="w-full sm:w-auto bg-white text-black hover:bg-gray-200 px-12 py-4 rounded-full font-bold text-lg transition-transform hover:scale-105 shadow-lg flex items-center justify-center gap-2 mx-auto">
+                        <i class="ph ph-windows-logo"></i>
+                        <span data-translate="btn_download_final">Baixar ChurchFlow v1.0</span>
+                    </button>
+                    <div class="mt-4 text-xs text-gray-500 font-mono">
+                        Checksum SHA256: <span class="text-gray-600">a4f...9c2</span> |
+                        <a href="https://github.com/Gbmarqss" target="_blank"
+                            class="hover:text-brand-neon transition-colors" data-translate="btn_github_profile">Perfil
+                            GitHub</a>
+                    </div>
+                </div>
+
+                <details
+                    class="group max-w-md mx-auto text-left border border-brand-border rounded-xl bg-brand-card/50 overflow-hidden">
+                    <summary
+                        class="flex items-center justify-between p-4 cursor-pointer hover:bg-brand-card transition-colors">
+                        <div class="flex items-center gap-3">
+                            <i class="ph ph-shield-warning text-brand-windows text-xl"></i>
+                            <span class="text-sm font-bold text-gray-300" data-translate="smart_title">"O Windows
+                                protegeu o computador"?</span>
+                        </div>
+                        <i class="ph ph-caret-down group-open:rotate-180 transition-transform text-gray-500"></i>
+                    </summary>
+                    <div
+                        class="p-4 pt-0 text-sm text-gray-400 leading-relaxed border-t border-brand-border/50 bg-brand-black/50">
+                        <p class="mb-3" data-translate="smart_desc">Como sou um desenvolvedor independente e não pago a
+                            taxa anual da Microsoft ($$$), o Windows pode exibir um alerta azul na primeira instalação.
+                        </p>
+                        <ol class="list-decimal pl-4 space-y-1 text-gray-300">
+                            <li><span data-translate="smart_step1">Clique em</span> <strong
+                                    class="text-white underline decoration-brand-windows">Mais informações</strong></li>
+                            <li><span data-translate="smart_step2">Depois clique em</span> <strong
+                                    class="text-white">Executar mesmo assim</strong></li>
+                        </ol>
+                    </div>
+                </details>
+            </div>
+        </div>
+    </section>
+
+    <footer class="border-t border-brand-border py-12 bg-brand-black text-sm">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
+            <div class="flex items-center gap-2 text-gray-500">
+                <span class="font-bold text-gray-300">ChurchFlow</span>
+                <span>© 2026 Gbmarqss</span>
+            </div>
+
+            <div class="flex gap-6 text-gray-500">
+                <button onclick="toggleModal()"
+                    class="hover:text-brand-neon transition-colors underline decoration-dotted"
+                    data-translate="footer_terms">Termos de Uso</button>
+                <a href="https://instagram.com/gbmarqss" target="_blank"
+                    class="hover:text-brand-neon transition-colors">Instagram</a>
+                <a href="https://github.com/Gbmarqss" target="_blank"
+                    class="hover:text-brand-neon transition-colors">GitHub</a>
+            </div>
+        </div>
+    </footer>
+
+    <div id="termsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="toggleModal()"></div>
+        <div
+            class="relative bg-brand-card border border-brand-border rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
+            <div
+                class="p-6 border-b border-brand-border flex justify-between items-center sticky top-0 bg-brand-card rounded-t-2xl z-10">
+                <h3 class="text-xl font-bold text-white" data-translate="modal_title">Termos de Uso e Responsabilidade
+                </h3>
+                <button onclick="toggleModal()" class="text-gray-400 hover:text-white p-2">
+                    <i class="ph ph-x text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto text-gray-300 space-y-4 text-sm leading-relaxed font-mono" id="modalContent"
+                data-translate="terms_content"></div>
+            <div class="p-4 border-t border-brand-border bg-brand-dark rounded-b-2xl flex justify-end">
+                <button onclick="toggleModal()"
+                    class="bg-brand-neon text-brand-black font-bold px-6 py-2 rounded-lg hover:bg-brand-neonHover transition-colors"
+                    data-translate="modal_btn">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SYSTEM_CONFIG = {
+            logoPath: "logo.png"
+        };
+
+        document.addEventListener("DOMContentLoaded", function () {
+            if (SYSTEM_CONFIG.logoPath && SYSTEM_CONFIG.logoPath.trim() !== "") {
+                const container = document.getElementById('logo-container');
+                const favicon = document.getElementById('dynamic-favicon');
+                container.innerHTML = `<img src="${SYSTEM_CONFIG.logoPath}" alt="ChurchFlow Logo" class="w-full h-full object-cover">`;
+                favicon.href = SYSTEM_CONFIG.logoPath;
+            }
+            document.getElementById('modalContent').innerHTML = translations['pt']['terms_content'];
+        });
+
+        function toggleModal() {
+            const modal = document.getElementById('termsModal');
+            const body = document.body;
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                body.style.overflow = 'hidden';
+            } else {
+                modal.classList.add('hidden');
+                body.style.overflow = 'auto';
+            }
+        }
+        document.addEventListener('keydown', function (event) {
+            if (event.key === "Escape") {
+                const modal = document.getElementById('termsModal');
+                if (!modal.classList.contains('hidden')) toggleModal();
+            }
+        });
+
+        const translations = {
+            pt: {
+                nav_problem: "O Problema",
+                nav_features: "Funcionalidades",
+                nav_roadmap: "Roadmap",
+                nav_about: "Sobre o Dev",
+                btn_download: "Baixar Agora",
+                btn_github_profile: "Perfil GitHub",
+                hero_title_1: "O Fim do Caos na",
+                hero_title_2: "Mídia da Igreja.",
+                hero_desc: "Um sistema gratuito que organiza cultos automaticamente, padroniza arquivos e protege o trabalho dos voluntários. Sem burocracia.",
+                hero_btn_primary: "Download Win64",
+                about_txt: "Desenvolvedor focado em criar soluções reais para problemas reais. O <strong>ChurchFlow</strong> nasceu da necessidade de automatizar tarefas repetitivas no ministério, unindo Python e Design para facilitar a vida de voluntários.",
+                support_label: "Apoie o Dev",
+                support_action: "Pagar um café",
+                prob_1_title: "Risco de Perda",
+                prob_1_desc: "Voluntários esquecem de copiar arquivos ou deletam acidentalmente. Perder fotos de um evento importante é irreversível.",
+                prob_2_title: "Desorganização",
+                prob_2_desc: "Pastas com nomes errados, datas misturadas e cultos (Manhã/Noite) no mesmo diretório. Um caos para encontrar arquivos depois.",
+                prob_3_title: "Trabalho Manual",
+                prob_3_desc: "Renomear 500 fotos manualmente ou criar pastas toda semana consome tempo precioso da equipe de mídia.",
+                how_title: "Workflow Inteligente",
+                how_subtitle: "A complexidade do Python escondida atrás de uma interface simples.",
+                step_1_desc: "O sistema lê o EXIF das fotos e separa eventos automaticamente baseado no horário (ex: Culto Manhã vs Noite).",
+                step_2_desc: "Interface de Cards. O voluntário vê o que já foi baixado (Verde) e o que é novo (Cinza). Zero confusão.",
+                step_3_desc: "Copia, renomeia a pasta no padrão correto (AAAA-MM-DD) e marca o cartão como 'Concluído'.",
+                roadmap_title: "Roadmap de Desenvolvimento",
+                roadmap_subtitle: "Prioridades definidas para garantir segurança e performance.",
+                road_1_title: "SafeCopy (shutil)",
+                road_1_desc: "Implementação robusta de cópia de arquivos para garantir que nenhum byte seja corrompido durante o backup.",
+                road_2_title: "Turbo Thumbnails",
+                road_2_desc: "Sistema de cache assíncrono para evitar travamentos ao carregar pastas com centenas de fotos pesadas.",
+                road_3_title: "Modo Foco",
+                road_3_desc: "Navegação otimizada por teclado (Setas) para agilizar o processo de curadoria e seleção.",
+                road_4_title: "Integrity Check",
+                road_4_desc: "Verificação via Hash (Checksum) para segurança extra contra corrupção silenciosa de arquivos.",
+                donate_title: "Contribua com o Projeto",
+                donate_desc: "O ChurchFlow é mantido por uma única pessoa. Sua doação ajuda a pagar custos de desenvolvimento e garante que o software continue gratuito.",
+                donate_note: "Todo valor é reinvestido no projeto.",
+                btn_download_final: "Baixar ChurchFlow v1.0",
+                smart_title: '"O Windows protegeu o computador"?',
+                smart_desc: 'Como sou um desenvolvedor independente e não pago a taxa anual da Microsoft ($$$), o Windows pode exibir um alerta azul na primeira instalação.',
+                smart_step1: 'Clique em',
+                smart_step2: 'Depois clique em',
+                footer_terms: "Termos de Uso",
+                modal_title: "Termos de Uso e Responsabilidade",
+                modal_btn: "Entendido",
+                terms_content: `
+                    <h4 class="font-bold text-white mb-2">1. Freeware Proprietário</h4>
+                    <p class="mb-4">O <strong>ChurchFlow</strong> é um software gratuito ("freeware"). Você tem permissão ilimitada para instalar, copiar e utilizar este software em quantos computadores desejar. No entanto, o código-fonte e os direitos de propriedade intelectual pertencem exclusivamente ao desenvolvedor. É proibida a engenharia reversa, modificação ou redistribuição de versões alteradas sem autorização expressa.</p>
+                    <h4 class="font-bold text-white mb-2">2. Isenção de Garantias (AS-IS)</h4>
+                    <p class="mb-4 text-brand-danger/80 border-l-2 border-brand-danger pl-3">O SOFTWARE É FORNECIDO "COMO ESTÁ", SEM GARANTIA DE QUALQUER TIPO. O DESENVOLVEDOR NÃO SE RESPONSABILIZA POR PERDA DE DADOS, CORRUPÇÃO DE ARQUIVOS OU FALHAS DE HARDWARE.</p>
+                    <h4 class="font-bold text-white mb-2">3. Privacidade e Dados</h4>
+                    <p class="mb-4">O ChurchFlow é um software "offline-first". O software NÃO coleta, armazena ou transmite fotos para servidores externos.</p>
+                    <h4 class="font-bold text-white mb-2">4. Doações</h4>
+                    <p>As doações são estritamente voluntárias para apoio ao desenvolvimento.</p>
+                `
+            },
+            en: {
+                nav_problem: "The Problem",
+                nav_features: "Features",
+                nav_roadmap: "Roadmap",
+                nav_about: "About Dev",
+                btn_download: "Download Now",
+                btn_github_profile: "GitHub Profile",
+                hero_title_1: "End the Chaos in",
+                hero_title_2: "Church Media.",
+                hero_desc: "A free system that automatically organizes services, standardizes files, and protects volunteer work. No bureaucracy.",
+                hero_btn_primary: "Download Win64",
+                about_txt: "Developer focused on creating real solutions for real problems. <strong>ChurchFlow</strong> was born from the need to automate repetitive tasks in the ministry, combining Python and Design to make volunteers' lives easier.",
+                support_label: "Support Dev",
+                support_action: "Buy me a coffee",
+                prob_1_title: "Risk of Loss",
+                prob_1_desc: "Volunteers forget to copy files or delete them accidentally. Losing photos from an important event is irreversible.",
+                prob_2_title: "Disorganization",
+                prob_2_desc: "Wrong folder names, mixed dates, and services (Morning/Evening) in the same directory. A chaos to find files later.",
+                prob_3_title: "Manual Work",
+                prob_3_desc: "Renaming 500 photos manually or creating folders every week consumes precious time from the media team.",
+                how_title: "Smart Workflow",
+                how_subtitle: "Python complexity hidden behind a simple interface.",
+                step_1_desc: "The system reads photo EXIF data and automatically separates events based on time (e.g., Morning vs. Evening Service).",
+                step_2_desc: "Card Interface. The volunteer sees what has already been downloaded (Green) and what is new (Gray). Zero confusion.",
+                step_3_desc: "Copies, renames the folder to the correct standard (YYYY-MM-DD), and marks the SD card as 'Completed'.",
+                roadmap_title: "Development Roadmap",
+                roadmap_subtitle: "Priorities set to ensure safety and performance.",
+                road_1_title: "SafeCopy (shutil)",
+                road_1_desc: "Robust file copy implementation to ensure zero data corruption during backup.",
+                road_2_title: "Turbo Thumbnails",
+                road_2_desc: "Async cache system to prevent freezing when loading folders with hundreds of heavy photos.",
+                road_3_title: "Focus Mode",
+                road_3_desc: "Optimized keyboard navigation (Arrows) to speed up the curation and selection process.",
+                road_4_title: "Integrity Check",
+                road_4_desc: "Hash Verification (Checksum) for extra security against silent file corruption.",
+                donate_title: "Contribute to the Project",
+                donate_desc: "ChurchFlow is maintained by a single person. Your donation helps pay for development costs and ensures the software remains free.",
+                donate_note: "All proceeds are reinvested in the project.",
+                btn_download_final: "Download ChurchFlow v1.0",
+                smart_title: '"Windows protected your PC"?',
+                smart_desc: 'Since I am an indie developer and do not pay Microsoft annual fees, Windows might show a blue alert on first install.',
+                smart_step1: 'Click on',
+                smart_step2: 'Then click on',
+                footer_terms: "Terms of Use",
+                modal_title: "Terms of Use & Disclaimer",
+                modal_btn: "Understood",
+                terms_content: `
+                    <h4 class="font-bold text-white mb-2">1. Proprietary Freeware</h4>
+                    <p class="mb-4"><strong>ChurchFlow</strong> is free software. You are granted unlimited permission to install, copy, and use this software on as many computers as you wish. However, the source code and intellectual property rights belong exclusively to the developer. Reverse engineering, modification, or redistribution of altered versions without express authorization is prohibited.</p>
+                    <h4 class="font-bold text-white mb-2">2. Disclaimer of Warranty (AS-IS)</h4>
+                    <p class="mb-4 text-brand-danger/80 border-l-2 border-brand-danger pl-3">THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.</p>
+                    <h4 class="font-bold text-white mb-2">3. Privacy and Data</h4>
+                    <p class="mb-4">ChurchFlow is "offline-first" software. It DOES NOT collect, store, or transmit photos to external servers.</p>
+                    <h4 class="font-bold text-white mb-2">4. Contributions</h4>
+                    <p>Donations made to the project are strictly voluntary.</p>
+                `
+            }
+        };
+
+        let currentLang = 'pt';
+
+        function toggleLanguage() {
+            currentLang = currentLang === 'pt' ? 'en' : 'pt';
+            if (currentLang === 'pt') {
+                document.getElementById('lang-pt').className = "text-white font-bold transition-colors";
+                document.getElementById('lang-en').className = "text-gray-600 hover:text-white transition-colors";
+            } else {
+                document.getElementById('lang-pt').className = "text-gray-600 hover:text-white transition-colors";
+                document.getElementById('lang-en').className = "text-white font-bold transition-colors";
+            }
+            const elements = document.querySelectorAll('[data-translate]');
+            elements.forEach(el => {
+                const key = el.getAttribute('data-translate');
+                if (translations[currentLang][key]) {
+                    el.innerHTML = translations[currentLang][key];
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>
