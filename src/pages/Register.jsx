@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, User, Users, UserPlus, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
 import { supabase } from '../supabaseClient';
@@ -7,6 +7,7 @@ import { supabase } from '../supabaseClient';
 export default function Register() {
     const navigate = useNavigate();
     const { signUp } = useAuth();
+    const [searchParams] = useSearchParams();
 
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
@@ -24,9 +25,16 @@ export default function Register() {
     const [success, setSuccess] = useState(false);
     const [inviteData, setInviteData] = useState(null); // Stores data from allowed_emails
 
+    // Token from URL (public invite link)
+    const inviteToken = searchParams.get('token');
+    const [tokenData, setTokenData] = useState(null);
+
     useEffect(() => {
         loadMinistries();
-    }, []);
+        if (inviteToken) {
+            validateToken();
+        }
+    }, [inviteToken]);
 
     // Check whitelist when email changes (debounce could be better, but onBlur or manual check is fine)
     // Here we check on Submit to be secure.
@@ -34,6 +42,36 @@ export default function Register() {
     const loadMinistries = async () => {
         const { data } = await supabase.from('ministries').select('*').order('name');
         if (data) setMinistries(data);
+    };
+
+    const validateToken = async () => {
+        try {
+            setVerifying(true);
+            // Token is the invite ID from allowed_emails table
+            const { data, error } = await supabase
+                .from('allowed_emails')
+                .select('*, ministry:ministries(id, name)')
+                .eq('id', inviteToken)
+                .single();
+
+            if (error || !data) {
+                setError('Link de convite inválido ou expirado.');
+                return;
+            }
+
+            // Pre-fill email if available
+            if (data.email) {
+                setEmail(data.email);
+            }
+
+            setTokenData(data);
+            console.log('[Register] Token validated:', data);
+        } catch (err) {
+            console.error('[Register] Token validation error:', err);
+            setError('Erro ao validar convite.');
+        } finally {
+            setVerifying(false);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -63,20 +101,36 @@ export default function Register() {
             let roleToAssign = 'viewer';
             let ministryToAssign = null;
 
-            // Whitelist Check - Email must be in allowed_emails table
-            const { data: allowedEmail, error: allowedError } = await supabase
-                .from('allowed_emails')
-                .select('*')
-                .eq('email', email.trim().toLowerCase())
-                .single();
+            // Scenario A: Invite Link (Token from URL)
+            if (inviteToken && tokenData) {
+                roleToAssign = tokenData.role;
+                ministryToAssign = tokenData.ministry_id;
 
-            if (allowedError || !allowedEmail) {
-                throw new Error('Email não está na lista de convidados. Solicite acesso ao administrador.');
+                // If token has an email, ensure it matches
+                if (tokenData.email && tokenData.email.toLowerCase() !== email.trim().toLowerCase()) {
+                    throw new Error('O email fornecido não corresponde ao email do convite.');
+                }
+
+                console.log('[Register] Using token data:', { role: roleToAssign, ministry: ministryToAssign });
             }
+            // Scenario B: Whitelist Check (Standard - no token)
+            else {
+                const { data: allowedEmail, error: allowedError } = await supabase
+                    .from('allowed_emails')
+                    .select('*')
+                    .eq('email', email.trim().toLowerCase())
+                    .single();
 
-            roleToAssign = allowedEmail.role;
-            ministryToAssign = allowedEmail.ministry_id;
-            setInviteData(allowedEmail);
+                if (allowedError || !allowedEmail) {
+                    throw new Error('Email não está na lista de convidados. Solicite acesso ao administrador.');
+                }
+
+                roleToAssign = allowedEmail.role;
+                ministryToAssign = allowedEmail.ministry_id;
+                setInviteData(allowedEmail);
+
+                console.log('[Register] Using whitelist data:', { role: roleToAssign, ministry: ministryToAssign });
+            }
 
             // Signup
             await signUp(email, password, name, ministryToAssign, roleToAssign);
