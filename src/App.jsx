@@ -403,6 +403,7 @@ function App() {
           <Route path="/ministries" element={<ProtectedRoute requireAdmin><Ministries /></ProtectedRoute>} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/equipe" element={<ProtectedRoute requireAdmin><UsersPage /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute requireAdmin><UsersPage /></ProtectedRoute>} />
           <Route path="/historico" element={<History />} />
           {/* Fallback */}
           <Route path="*" element={<Home />} />
