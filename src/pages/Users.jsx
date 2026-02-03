@@ -49,9 +49,15 @@ export default function Users() {
     const loadData = async () => {
         try {
             setLoading(true);
+            console.log('[Users] Starting data load...');
 
             // 1. Fetch Ministries (Reference)
-            const { data: minData } = await supabase.from('ministries').select('*');
+            const { data: minData, error: minError } = await supabase.from('ministries').select('*');
+            if (minError) {
+                console.error('[Users] Ministries error:', minError);
+                throw minError;
+            }
+            console.log('[Users] Ministries loaded:', minData?.length || 0);
             setMinistries(minData || []);
 
             // 2. Fetch Active Users
@@ -59,7 +65,11 @@ export default function Users() {
                 .from('users')
                 .select('*, ministry:ministries(id, name)')
                 .order('name');
-            if (usersError) throw usersError;
+            if (usersError) {
+                console.error('[Users] Users error:', usersError);
+                throw usersError;
+            }
+            console.log('[Users] Users loaded:', usersData?.length || 0);
             setUsers(usersData || []);
 
             // 3. Fetch Invites (Allowed Emails)
@@ -68,12 +78,18 @@ export default function Users() {
                 .select('*, ministry:ministries(id,name)')
                 .order('created_at', { ascending: false });
 
-            if (invitesError) console.error('Error fetching invites:', invitesError); // Non-critical if policy fails for non-admins (but this page is admin only)
+            if (invitesError) {
+                console.error('[Users] Invites error:', invitesError);
+                // Non-critical if policy fails for non-admins
+            } else {
+                console.log('[Users] Invites loaded:', invitesData?.length || 0);
+            }
             setInvites(invitesData || []);
 
+            console.log('[Users] Data load complete!');
         } catch (error) {
-            console.error('Error loading data:', error);
-            showToast('Erro ao carregar dados.', 'error');
+            console.error('[Users] Fatal error loading data:', error);
+            showToast(`Erro ao carregar dados: ${error.message}`, 'error');
         } finally {
             setLoading(false);
         }
