@@ -63,30 +63,20 @@ export default function Register() {
             let roleToAssign = 'viewer';
             let ministryToAssign = null;
 
-            // Scenario A: Invite Link (Token)
-            if (inviteToken && tokenData) {
-                roleToAssign = tokenData.role;
-                ministryToAssign = tokenData.ministry_id;
-                // If token has an email, ensure it matches the one provided by the user
-                if (tokenData.email && tokenData.email.toLowerCase() !== email.trim().toLowerCase()) {
-                    throw new Error('O email fornecido não corresponde ao email do convite.');
-                }
-            }
-            // Scenario B: Whitelist Check (Standard)
-            else {
-                const { data: allowedEmail, error: allowedError } = await supabase
-                    .from('allowed_emails')
-                    .select('*')
-                    .eq('email', email.trim().toLowerCase())
-                    .single();
+            // Whitelist Check - Email must be in allowed_emails table
+            const { data: allowedEmail, error: allowedError } = await supabase
+                .from('allowed_emails')
+                .select('*')
+                .eq('email', email.trim().toLowerCase())
+                .single();
 
-                if (allowedError || !allowedEmail) {
-                    throw new Error('Email não está na lista de convidados. Solicite acesso ao administrador.');
-                }
-                roleToAssign = allowedEmail.role;
-                ministryToAssign = allowedEmail.ministry_id;
-                setInviteData(allowedEmail); // Keep for success message context
+            if (allowedError || !allowedEmail) {
+                throw new Error('Email não está na lista de convidados. Solicite acesso ao administrador.');
             }
+
+            roleToAssign = allowedEmail.role;
+            ministryToAssign = allowedEmail.ministry_id;
+            setInviteData(allowedEmail);
 
             // Signup
             await signUp(email, password, name, ministryToAssign, roleToAssign);
