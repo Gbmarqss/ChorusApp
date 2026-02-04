@@ -61,7 +61,7 @@ export function AuthProvider({ children }) {
     };
 
     const signIn = async (email, password) => {
-        setLoading(true); // Start loading immediately to prevent redirect
+        setLoading(true);
         try {
             const { data, error } = await supabase.auth.signInWithPassword({
                 email,
@@ -70,36 +70,76 @@ export function AuthProvider({ children }) {
 
             if (error) throw error;
 
-            // Manually load profile to ensure state is ready before navigation
+            // Verificar se usuário está ativo
+            const { data: userData, error: userError } = await supabase
+                .from('users')
+                .select('is_active')
+                .eq('id', data.user.id)
+                .single();
+
+            if (userError) throw userError;
+
+            if (!userData?.is_active) {
+                await supabase.auth.signOut();
+                throw new Error('Conta não ativada. Use o código de ativação recebido para ativar sua conta.');
+            }
+
+            // Load profile
             if (data.session?.user) {
                 await loadUserProfile(data.session.user.id);
             }
             return data;
         } catch (error) {
-            setLoading(false); // Reset loading on error
+            setLoading(false);
             throw error;
         }
     };
 
-    const signUp = async (email, password, name, ministryId, role = 'viewer') => {
-        // Create auth user with metadata
-        // The Trigger 'handle_new_user' (server-side) will catch this and create the public.users profile
-        // using the data from 'allowed_emails' table.
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                data: {
-                    name,
-                    // We don't need to pass role/ministry here anymore because the trigger
-                    // fetches them from the 'allowed_emails' table for security.
-                }
+    /**
+     * Ativa conta de usuário usando código de ativação
+     * Usado no primeiro acesso
+     */
+    const activateAccount = async (email, code, password, name) => {
+        try {
+            // 1. Validar código e email
+            const { data: validationResult, error: validationError } = await supabase
+                .rpc('activate_user_account', {
+                    p_email: email.toLowerCase().trim(),
+                    p_code: code.toUpperCase().trim()
+                });
+
+            if (validationError) throw validationError;
+
+            if (!validationResult?.success) {
+                throw new Error(validationResult?.error || 'Código inválido ou já utilizado');
             }
-        });
 
-        if (authError) throw authError;
+            const userId = validationResult.user_id;
 
-        return authData;
+            // 2. Criar usuário no Supabase Auth
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email: email.toLowerCase().trim(),
+                password,
+                options: {
+                    data: { name }
+                }
+            });
+
+            if (authError) throw authError;
+
+            // 3. Atualizar nome do usuário na tabela users
+            const { error: updateError } = await supabase
+                .from('users')
+                .update({ name })
+                .eq('id', userId);
+
+            if (updateError) console.error('Error updating name:', updateError);
+
+            return authData;
+        } catch (error) {
+            console.error('[AuthContext] Activation error:', error);
+            throw error;
+        }
     };
 
     const signOut = async () => {
@@ -128,8 +168,8 @@ export function AuthProvider({ children }) {
         session,
         loading,
         signIn,
-        signUp,
         signOut,
+        activateAccount,
         resetPassword,
         updatePassword,
     };

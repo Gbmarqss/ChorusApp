@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Mail, Lock, LogIn, AlertCircle, ArrowRight } from 'lucide-react';
+import { Mail, Lock, LogIn, AlertCircle, UserPlus } from 'lucide-react';
+import Input from '../components/ui/Input';
 
 export default function Login() {
     const navigate = useNavigate();
@@ -30,6 +31,8 @@ export default function Login() {
             console.error('Login error:', err);
             if (err.message.includes('Invalid login credentials')) {
                 setError('Credenciais inválidas. Verifique email e senha.');
+            } else if (err.message.includes('não ativada')) {
+                setError(err.message);
             } else {
                 setError('Erro ao entrar. Tente novamente.');
             }
@@ -76,71 +79,75 @@ export default function Login() {
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2 ml-1">Email Corporativo</label>
-                            <div className="relative group">
-                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <Mail className="text-slate-500 group-focus-within:text-blue-500 transition-colors" size={20} />
-                                </div>
-                                <input
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="block w-full pl-12 pr-4 py-4 bg-[#020617] border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                                    placeholder="seu@email.com"
-                                    disabled={loading}
-                                />
-                            </div>
-                        </div>
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        <Input
+                            label="Email"
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="seu@email.com"
+                            icon={Mail}
+                            required
+                            disabled={loading}
+                        />
 
-                        <div>
-                            <div className="flex justify-between items-center mb-2 ml-1">
-                                <label className="block text-xs font-bold text-slate-400 uppercase">Senha</label>
-                                <Link to="/forgot-password" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                                    Esqueceu a senha?
-                                </Link>
-                            </div>
-                            <div className="relative group">
-                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <Lock className="text-slate-500 group-focus-within:text-blue-500 transition-colors" size={20} />
-                                </div>
-                                <input
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="block w-full pl-12 pr-4 py-4 bg-[#020617] border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                                    placeholder="••••••••"
-                                    disabled={loading}
-                                />
-                            </div>
-                        </div>
+                        <Input
+                            label="Senha"
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="Sua senha"
+                            icon={Lock}
+                            required
+                            disabled={loading}
+                        />
 
                         <button
                             type="submit"
                             disabled={loading}
-                            className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-900/20 ${loading
-                                ? 'bg-slate-700 cursor-not-allowed opacity-70'
-                                : 'bg-blue-600 hover:bg-blue-500 transform hover:-translate-y-0.5'
-                                }`}
+                            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:from-slate-700 disabled:to-slate-600 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-xl transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 flex items-center justify-center gap-2 mt-6"
                         >
                             {loading ? (
-                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                <>
+                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    Entrando...
+                                </>
                             ) : (
                                 <>
-                                    Entrar <ArrowRight size={20} />
+                                    <LogIn size={20} />
+                                    Entrar
                                 </>
                             )}
                         </button>
                     </form>
 
-                    <div className="mt-8 pt-6 border-t border-slate-800 text-center">
-                        <p className="text-slate-400 text-sm">
-                            Primeiro acesso?{' '}
-                            <Link to="/register" className="text-blue-400 hover:text-blue-300 font-bold transition-colors">
-                                Ativar Conta (Convite)
-                            </Link>
-                        </p>
+                    {/* Divider */}
+                    <div className="relative my-6">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-slate-700"></div>
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                            <span className="px-4 bg-[#0f172a] text-slate-400">ou</span>
+                        </div>
+                    </div>
+
+                    {/* First Access Button */}
+                    <Link
+                        to="/primeiro-acesso"
+                        className="w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2 border border-slate-700 hover:border-slate-600"
+                    >
+                        <UserPlus size={20} />
+                        Primeiro Acesso
+                    </Link>
+
+                    {/* Footer */}
+                    <div className="mt-6 text-center">
+                        <Link
+                            to="/forgot-password"
+                            className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                            Esqueceu sua senha?
+                        </Link>
                     </div>
                 </div>
             </div>

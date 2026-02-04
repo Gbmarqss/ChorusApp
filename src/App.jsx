@@ -2,9 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Upload, FileSpreadsheet, Download, Share2, AlertTriangle, Moon, Sun, Search, Calendar, CheckCircle, XCircle, Lock, Flame, Filter, Menu, Link, Plus, X, Users, GitBranch } from 'lucide-react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { ToastProvider } from './components/ui/Toast';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import FirstAccess from './pages/FirstAccess';
 import ForgotPassword from './pages/ForgotPassword';
 import Profile from './pages/Profile';
 import UsersPage from './pages/Users';
@@ -379,37 +381,38 @@ const ExportBtn = ({ icon, label, onClick, color = 'blue' }) => {
 
 function App() {
   return (
-    <AuthProvider>
-      <Routes>
-        {/* Public routes - Auth */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
+    <ToastProvider>
+      <AuthProvider>
+        <Routes>
+          <Route element={<Layout />}>
+            {/* Public Routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/primeiro-acesso" element={<FirstAccess />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
 
-        {/* Public route - Shared pre-escala (no auth required) */}
-        <Route path="/pre-escala/:id" element={<PublicPreEscala />} />
+            {/* Public - Shared */}
+            <Route path="/pre-escala/:id" element={<PublicPreEscala />} />
+            <Route path="/public/:id" element={<PublicScheduleView />} />
 
-        {/* Public route - Final published schedule */}
-        <Route path="/public/:id" element={<PublicScheduleView />} />
+            {/* Protected Routes */}
+            <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/wizard" element={<ProtectedRoute><ScaleWizard /></ProtectedRoute>} />
+            <Route path="/pre-scale/:id" element={<ProtectedRoute><PreScaleEditor /></ProtectedRoute>} />
+            <Route path="/schedules/:id/edit" element={<ProtectedRoute><EditPublishedSchedule /></ProtectedRoute>} />
+            <Route path="/ministries" element={<ProtectedRoute requireAdmin><Ministries /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/equipe" element={<ProtectedRoute requireAdmin><UsersPage /></ProtectedRoute>} />
+            <Route path="/users" element={<ProtectedRoute requireAdmin><UsersPage /></ProtectedRoute>} />
+            <Route path="/historico" element={<History />} />
 
-        {/* Protected routes - Require authentication */}
-        <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-          <Route path="/" element={<Home />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/wizard" element={<ProtectedRoute><ScaleWizard /></ProtectedRoute>} />
-          <Route path="/pre-scale/:id" element={<ProtectedRoute><PreScaleEditor /></ProtectedRoute>} />
-          <Route path="/schedules/:id/edit" element={<ProtectedRoute><EditPublishedSchedule /></ProtectedRoute>} />
-          <Route path="/public/:id" element={<PublicScheduleView />} />
-          <Route path="/ministries" element={<ProtectedRoute requireAdmin><Ministries /></ProtectedRoute>} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/equipe" element={<ProtectedRoute requireAdmin><UsersPage /></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute requireAdmin><UsersPage /></ProtectedRoute>} />
-          <Route path="/historico" element={<History />} />
-          {/* Fallback */}
-          <Route path="*" element={<Home />} />
-        </Route>
-      </Routes>
-    </AuthProvider>
+            {/* Fallback */}
+            <Route path="*" element={<Home />} />
+          </Route>
+        </Routes>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 
