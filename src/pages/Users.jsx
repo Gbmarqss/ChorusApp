@@ -1,187 +1,296 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Search, Shield, Trash2, Edit2, Save, X, Plus, UserPlus, Mail, CheckCircle, Clock, AlertTriangle, Link as LinkIcon, Copy } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+import { Search, Trash2, Edit2, Plus, UserPlus, Key, Copy, CheckCircle, Clock, X, AlertTriangle, Shield, Mail, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import ConfirmModal from '../components/ConfirmModal';
-import InviteUserModal from '../components/InviteUserModal';
-
-// Toast Component Local (reused pattern)
-const Toast = ({ message, type = 'success', onClose }) => (
-    <div className={`fixed bottom-4 right-4 z-50 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-slide-in ${type === 'error' ? 'bg-red-900 border border-red-500 text-white' : 'bg-emerald-900 border border-emerald-500 text-white'
-        }`}>
-        {type === 'error' ? <AlertTriangle size={20} /> : <CheckCircle size={20} />}
-        <p className="font-bold">{message}</p>
-        <button onClick={onClose} className="ml-2 opacity-50 hover:opacity-100"><X size={16} /></button>
-    </div>
-);
+import { useToast } from '../components/ui/Toast';
+import Input from '../components/ui/Input';
+import Modal from '../components/ui/Modal';
+import MultiSelect from '../components/ui/MultiSelect';
 
 export default function Users() {
     const { user: currentUser } = useAuth();
+    const toast = useToast();
 
     // Data States
     const [users, setUsers] = useState([]);
-    const [invites, setInvites] = useState([]); // Whitelist
     const [ministries, setMinistries] = useState([]);
 
     // UI States
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-    const [activeTab, setActiveTab] = useState('active'); // 'active' | 'invites'
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Edit State
-    const [editingUser, setEditingUser] = useState(null);
-    const [editForm, setEditForm] = useState({});
+    // Modals
+    const [createModalOpen, setCreateModalOpen] = useState(false);
+    const [editModalOpen, setEditModalOpen] = useState(false);
+    const [deleteModal, setDeleteModal] = useState({ isOpen: false, user: null });
+    const [successModalOpen, setSuccessModalOpen] = useState(false);
 
-    // Modals & Toast
-    const [toast, setToast] = useState(null);
-    const [modal, setModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => { } });
-    const [inviteModalOpen, setInviteModalOpen] = useState(false);
+    // Forms
+    const [createForm, setCreateForm] = useState({
+        name: '',
+        email: '',
+        ministry_ids: [],
+        role: 'member',
+        temp_password: ''
+    });
+
+    const [editForm, setEditForm] = useState({
+        id: '',
+        name: '',
+        email: '',
+        ministry_ids: [],
+        role: ''
+    });
+
+    const [generatedCredentials, setGeneratedCredentials] = useState(null);
 
     useEffect(() => {
         loadData();
     }, []);
 
-    const showToast = (message, type = 'success') => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 3000);
-    };
-
     const loadData = async () => {
         try {
             setLoading(true);
-            console.log('[Users] Starting data load...');
 
-            // 1. Fetch Ministries (Reference)
-            const { data: minData, error: minError } = await supabase.from('ministries').select('*');
-            if (minError) {
-                console.error('[Users] Ministries error:', minError);
-                throw minError;
-            }
-            console.log('[Users] Ministries loaded:', minData?.length || 0);
+            // Fetch Ministries
+            const { data: minData, error: minError } = await supabase
+                .from('ministries')
+                .select('id, name')
+                .order('name');
+
+            if (minError) throw minError;
             setMinistries(minData || []);
 
-            // 2. Fetch Active Users
+            // Fetch Users with Ministries
             const { data: usersData, error: usersError } = await supabase
                 .from('users')
-                .select('*, ministry:ministries(id, name)')
+                .select(`
+                    *,
+                    user_ministries (
+                        ministry:ministries (id, name)
+                    )
+                `)
                 .order('name');
-            if (usersError) {
-                console.error('[Users] Users error:', usersError);
-                throw usersError;
-            }
-            console.log('[Users] Users loaded:', usersData?.length || 0);
-            setUsers(usersData || []);
 
-            // 3. Fetch Invites (Allowed Emails)
-            const { data: invitesData, error: invitesError } = await supabase
-                .from('allowed_emails')
-                .select('*, ministry:ministries(id,name)')
-                .order('created_at', { ascending: false });
+            if (usersError) throw usersError;
 
-            if (invitesError) {
-                console.error('[Users] Invites error:', invitesError);
-                // Non-critical if policy fails for non-admins
-            } else {
-                console.log('[Users] Invites loaded:', invitesData?.length || 0);
-            }
-            setInvites(invitesData || []);
+            // Transform data to flatten ministries
+            const transformedUsers = usersData?.map(u => ({
+                ...u,
+                ministries: u.user_ministries?.map(um => um.ministry).filter(Boolean) || []
+            })) || [];
 
-            console.log('[Users] Data load complete!');
+            setUsers(transformedUsers);
+
         } catch (error) {
-            console.error('[Users] Fatal error loading data:', error);
-            showToast(`Erro ao carregar dados: ${error.message}`, 'error');
+            console.error('[Users] Error loading data:', error);
+            toast.error(`Erro ao carregar dados: ${error.message}`);
         } finally {
             setLoading(false);
         }
     };
 
-    // --- Active User Actions ---
-    const handleEdit = (user) => {
-        setEditingUser(user.id);
+    const validatePassword = (password) => {
+        if (password.length < 6) return "A senha deve ter no mínimo 6 caracteres.";
+        return null;
+    };
+
+    const handleCreateUser = async () => {
+        // Validações
+        if (!createForm.name || !createForm.email || createForm.ministry_ids.length === 0 || !createForm.temp_password) {
+            toast.error('Preencha todos os campos obrigatórios (incluindo ao menos um ministério).');
+            return;
+        }
+
+        const passwordError = validatePassword(createForm.temp_password);
+        if (passwordError) {
+            toast.error(passwordError);
+            return;
+        }
+
+        setIsSubmitting(true);
+
+        try {
+            // 0. Criar cliente temporário ISOLADO
+            const tempSupabase = createClient(
+                import.meta.env.VITE_SUPABASE_URL,
+                import.meta.env.VITE_SUPABASE_ANON_KEY,
+                {
+                    auth: {
+                        persistSession: false,
+                        autoRefreshToken: false,
+                        detectSessionInUrl: false
+                    }
+                }
+            );
+
+            // 1. Criar usuário no Auth
+            const { data: authData, error: authError } = await tempSupabase.auth.signUp({
+                email: createForm.email.toLowerCase().trim(),
+                password: createForm.temp_password,
+                options: {
+                    data: { name: createForm.name.trim() }
+                }
+            });
+
+            if (authError) throw authError;
+
+            if (!authData.user) {
+                throw new Error('Erro ao criar usuário. Email pode já estar em uso.');
+            }
+
+            const userId = authData.user.id;
+
+            // 2. Criar registro na tabela users
+            // Mantemos ministry_id como o primeiro selecionado para compatibilidade retroativa, se necessário
+            const { error: userError } = await supabase
+                .from('users')
+                .insert([{
+                    id: userId,
+                    email: createForm.email.toLowerCase().trim(),
+                    name: createForm.name.trim(),
+                    role: createForm.role,
+                    ministry_id: createForm.ministry_ids[0] || null,
+                    is_active: true,
+                    must_change_password: true
+                }]);
+
+            if (userError) throw userError;
+
+            // 3. Inserir Ministérios na tabela de junção
+            if (createForm.ministry_ids.length > 0) {
+                const ministryInserts = createForm.ministry_ids.map(mid => ({
+                    user_id: userId,
+                    ministry_id: mid
+                }));
+
+                const { error: minRelError } = await supabase
+                    .from('user_ministries')
+                    .insert(ministryInserts);
+
+                if (minRelError) throw minRelError;
+            }
+
+            // Sucesso
+            setGeneratedCredentials({
+                email: createForm.email,
+                password: createForm.temp_password
+            });
+
+            setCreateModalOpen(false);
+            setSuccessModalOpen(true);
+
+            // Limpar form
+            setCreateForm({
+                name: '',
+                email: '',
+                ministry_ids: [],
+                role: 'member',
+                temp_password: ''
+            });
+
+            loadData();
+
+        } catch (error) {
+            console.error('[Users] Error creating user:', error);
+            if (error.message.includes('rate limit')) {
+                toast.error('Limite de segurança atingido. Aguarde alguns minutos antes de criar outro usuário (Restrição do Supabase).');
+            } else if (error.message.includes('already registered')) {
+                toast.error('Este email já está cadastrado.');
+            } else {
+                toast.error(`Erro ao criar usuário: ${error.message}`);
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const openEditModal = (user) => {
         setEditForm({
-            role: user.role,
-            ministry_id: user.ministry_id
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            ministry_ids: user.ministries?.map(m => m.id) || [],
+            role: user.role
         });
+        setEditModalOpen(true);
     };
 
-    const handleSave = async (id) => {
+    const handleUpdateUser = async () => {
+        setIsSubmitting(true);
         try {
-            const { error } = await supabase.from('users').update(editForm).eq('id', id);
-            if (error) throw error;
+            // 1. Atualizar dados básicos
+            const { error: userError } = await supabase
+                .from('users')
+                .update({
+                    name: editForm.name,
+                    role: editForm.role,
+                    ministry_id: editForm.ministry_ids[0] || null // Compatibilidade
+                })
+                .eq('id', editForm.id);
 
-            const updatedMinistry = ministries.find(m => m.id === editForm.ministry_id) || null;
-            setUsers(users.map(u => u.id === id ? { ...u, ...editForm, ministry: updatedMinistry } : u));
-            setEditingUser(null);
-            showToast("Usuário atualizado com sucesso!");
-        } catch (err) {
-            showToast('Erro ao atualizar: ' + err.message, 'error');
+            if (userError) throw userError;
+
+            // 2. Atualizar Ministérios (Delete All + Insert All strategy is simplest for small lists)
+
+            // Delete existing
+            const { error: delError } = await supabase
+                .from('user_ministries')
+                .delete()
+                .eq('user_id', editForm.id);
+
+            if (delError) throw delError;
+
+            // Insert new
+            if (editForm.ministry_ids.length > 0) {
+                const ministryInserts = editForm.ministry_ids.map(mid => ({
+                    user_id: editForm.id,
+                    ministry_id: mid
+                }));
+
+                const { error: insError } = await supabase
+                    .from('user_ministries')
+                    .insert(ministryInserts);
+
+                if (insError) throw insError;
+            }
+
+            toast.success('Usuário atualizado!');
+            setEditModalOpen(false);
+            loadData();
+
+        } catch (error) {
+            console.error('[Users] Update error:', error);
+            toast.error(`Erro ao atualizar: ${error.message}`);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
-    const confirmDelete = (userToDelete) => {
-        setModal({
-            isOpen: true,
-            title: 'Remover Membro',
-            message: `Tem certeza que deseja remover ${userToDelete.name}? Essa ação retira o acesso dele aos dados da igreja.`,
-            type: 'danger',
-            onConfirm: () => handleDelete(userToDelete)
-        });
-    };
-
-    const handleDelete = async (userToDelete) => {
+    const handleDelete = async () => {
         try {
-            const { error } = await supabase.from('users').delete().eq('id', userToDelete.id);
+            const { error } = await supabase
+                .from('users')
+                .delete()
+                .eq('id', deleteModal.user.id);
+
             if (error) throw error;
-            setUsers(users.filter(u => u.id !== userToDelete.id));
-            showToast(`${userToDelete.name} foi removido.`);
-        } catch (err) {
-            showToast('Erro ao deletar: ' + err.message, 'error');
+
+            toast.success('Usuário removido!');
+            setDeleteModal({ isOpen: false, user: null });
+            loadData();
+
+        } catch (error) {
+            console.error('[Users] Deletion error:', error);
+            toast.error(`Erro ao deletar: ${error.message}`);
         }
     };
 
-    // --- Invite Actions ---
-    const confirmDeleteInvite = (id, email) => {
-        setModal({
-            isOpen: true,
-            title: 'Revogar Convite',
-            message: `Deseja cancelar o convite para ${email}? O usuário não poderá mais se cadastrar.`,
-            type: 'danger',
-            onConfirm: () => handleDeleteInvite(id)
-        });
-    };
-
-    const handleDeleteInvite = async (id) => {
-        try {
-            const { error } = await supabase.from('allowed_emails').delete().eq('id', id);
-            if (error) throw error;
-            setInvites(invites.filter(i => i.id !== id));
-            showToast('Convite revogado.');
-        } catch (err) {
-            showToast('Erro: ' + err.message, 'error');
-        }
-    };
-
-    // --- Invite Link Logic ---
-    const [linkModalOpen, setLinkModalOpen] = useState(false);
-    const [generatedLink, setGeneratedLink] = useState('');
-
-    const generateLink = async () => {
-        try {
-            const token = crypto.randomUUID();
-            const { error } = await supabase.from('invite_links').insert([{
-                token,
-                role: 'viewer',
-                created_by: currentUser.id,
-                active: true
-            }]);
-
-            if (error) throw error;
-            setGeneratedLink(`${window.location.origin}/register?token=${token}`);
-            setLinkModalOpen(true);
-        } catch (err) {
-            console.error(err);
-            showToast('Erro ao gerar link.', 'error');
-        }
+    const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+        toast.success('Copiado!');
     };
 
     const filteredUsers = users.filter(u =>
@@ -189,275 +298,373 @@ export default function Users() {
         u.email?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const filteredInvites = invites.filter(i =>
-        i.email?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const getRoleBadge = (role) => {
+        const badges = {
+            superadmin: 'bg-purple-900/30 text-purple-300 border-purple-500/30',
+            admin: 'bg-blue-900/30 text-blue-300 border-blue-500/30',
+            leader: 'bg-emerald-900/30 text-emerald-300 border-emerald-500/30',
+            member: 'bg-slate-800 text-slate-300 border-slate-600',
+            viewer: 'bg-slate-900 text-slate-400 border-slate-700'
+        };
+        const labels = {
+            superadmin: 'SuperAdmin',
+            admin: 'Admin',
+            leader: 'Líder',
+            member: 'Membro',
+            viewer: 'Visualizador'
+        };
+        return (
+            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${badges[role] || badges.member}`}>
+                {labels[role] || role}
+            </span>
+        );
+    };
+
+    const ministryOptions = ministries.map(m => ({ value: m.id, label: m.name }));
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
+    }
 
     return (
-        <div className="space-y-6 animate-fade-in-up pb-20">
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+        <div className="p-6 max-w-7xl mx-auto space-y-8 animate-fade-in-up">
 
-            <ConfirmModal
-                isOpen={modal.isOpen}
-                onClose={() => setModal({ ...modal, isOpen: false })}
-                onConfirm={modal.onConfirm}
-                title={modal.title}
-                message={modal.message}
-                type={modal.type}
-            />
-
-            <InviteUserModal
-                isOpen={inviteModalOpen}
-                onClose={() => setInviteModalOpen(false)}
-                onSuccess={() => {
-                    showToast('Convite enviado com sucesso!');
-                    loadData();
-                }}
-                ministries={ministries}
-            />
-
-            {/* Link Result Modal */}
-            {linkModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-                    <div className="bg-[#0f172a] border border-blue-900/30 rounded-2xl p-6 max-w-md w-full shadow-2xl animate-scale-in">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-xl font-bold flex items-center gap-2"><LinkIcon size={20} className="text-emerald-400" /> Link de Convite Gerado</h3>
-                            <button onClick={() => setLinkModalOpen(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
-                        </div>
-                        <p className="text-slate-400 text-sm mb-4">Qualquer pessoa com este link poderá se cadastrar.</p>
-
-                        <div className="bg-[#020617] p-3 rounded-lg flex items-center justify-between border border-slate-800 mb-6 gap-2">
-                            <code className="text-blue-400 text-xs break-all">{generatedLink}</code>
-                            <button
-                                onClick={() => {
-                                    navigator.clipboard.writeText(generatedLink);
-                                    showToast('Link copiado!');
-                                }}
-                                className="p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 transition-colors shrink-0"
-                            >
-                                <Copy size={16} />
-                            </button>
-                        </div>
-
-                        <button onClick={() => setLinkModalOpen(false)} className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white font-bold">Concluído</button>
-                    </div>
-                </div>
-            )}
-
-            {/* Header & Controls */}
+            {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-white">Gerenciar Equipe</h1>
-                    <p className="text-slate-400 mt-1">Controle de acesso e permissões</p>
+                    <h1 className="text-3xl font-bold text-white mb-1">Equipe</h1>
+                    <p className="text-slate-400">Gerencie os membros e permissões do sistema.</p>
                 </div>
-
-                <div className="flex gap-3 w-full md:w-auto">
-                    <button
-                        onClick={generateLink}
-                        className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border border-slate-700"
-                    >
-                        <LinkIcon size={18} /> Link Público
-                    </button>
-                    <button
-                        onClick={() => setInviteModalOpen(true)}
-                        className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:shadow-blue-500/20 transition-all"
-                    >
-                        <UserPlus size={20} /> Convidar Membro
-                    </button>
-                </div>
+                <button
+                    onClick={() => setCreateModalOpen(true)}
+                    className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg hover:shadow-blue-500/20 flex items-center gap-2"
+                >
+                    <UserPlus size={20} />
+                    Novo Usuário
+                </button>
             </div>
 
-            {/* Tabs & Search */}
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b border-blue-900/30 pb-4">
-                <div className="flex gap-2 p-1 bg-[#020617] rounded-xl border border-blue-900/30">
-                    <button
-                        onClick={() => setActiveTab('active')}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'active' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                    >
-                        Membros Ativos ({users.length})
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('invites')}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'invites' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                    >
-                        Convites Pendentes ({invites.length})
-                    </button>
-                </div>
-
-                <div className="relative w-full md:w-72">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input
-                        type="text"
-                        placeholder={activeTab === 'active' ? "Buscar membros..." : "Buscar convites..."}
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#0f172a] border border-blue-900/30 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder-slate-500 transition-all"
-                    />
-                </div>
+            {/* Search */}
+            <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
+                <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Buscar por nome ou email..."
+                    className="w-full bg-[#0f172a] border border-blue-900/30 rounded-xl py-4 pl-12 pr-4 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                />
             </div>
 
-            {/* Content Area */}
-            <div className="bg-[#0f172a] border border-blue-900/30 rounded-2xl overflow-hidden shadow-xl min-h-[400px]">
-                {activeTab === 'active' ? (
-                    // --- ACTIVE USERS TABLE ---
-                    <div className="overflow-x-auto">
-                        <table className="w-full whitespace-nowrap">
-                            <thead className="bg-[#020617]/50 border-b border-blue-900/30">
-                                <tr>
-                                    <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase">Membro</th>
-                                    <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase hidden md:table-cell">Email</th>
-                                    <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase">Função</th>
-                                    <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase">Ministério</th>
-                                    <th className="text-right py-4 px-6 text-xs font-bold text-slate-400 uppercase">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-blue-900/10">
-                                {filteredUsers.map(user => {
-                                    const isEditing = editingUser === user.id;
-                                    return (
-                                        <tr key={user.id} className="hover:bg-white/5 transition-colors">
-                                            <td className="py-4 px-6">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-blue-900/30 flex items-center justify-center text-blue-300 font-bold border border-blue-500/20 shrink-0">
-                                                        {user.name?.charAt(0).toUpperCase()}
-                                                    </div>
-                                                    <div>
-                                                        <span className="font-medium text-slate-200 block">{user.name}</span>
-                                                        <span className="text-xs text-slate-500 md:hidden">{user.email}</span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="py-4 px-6 text-slate-400 text-sm hidden md:table-cell">{user.email}</td>
-                                            <td className="py-4 px-6">
-                                                {isEditing ? (
-                                                    <select value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })} className="bg-[#020617] border border-blue-500 text-white text-xs rounded p-2 outline-none">
-                                                        <option value="viewer">Membro</option>
-                                                        <option value="leader">Líder</option>
-                                                        <option value="admin">Admin</option>
-                                                    </select>
-                                                ) : (
-                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${user.role === 'admin' ? 'bg-purple-900/20 text-purple-300 border-purple-500/30' :
-                                                        user.role === 'leader' ? 'bg-blue-900/20 text-blue-300 border-blue-500/30' :
-                                                            'bg-slate-800 text-slate-300 border-slate-600/30'
-                                                        }`}>
-                                                        <Shield size={12} />
-                                                        {user.role === 'admin' ? 'ADMIN' : user.role === 'leader' ? 'LÍDER' : 'MEMBRO'}
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="py-4 px-6 text-slate-400 text-sm">
-                                                {isEditing ? (
-                                                    <select value={editForm.ministry_id || ''} onChange={e => setEditForm({ ...editForm, ministry_id: e.target.value })} className="bg-[#020617] border border-blue-500 text-white text-xs rounded p-2 outline-none w-32">
-                                                        <option value="">Nenhum</option>
-                                                        {ministries.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                                    </select>
-                                                ) : <span className="flex items-center gap-1">{user.ministry?.name || '-'}</span>}
-                                            </td>
-                                            <td className="py-4 px-6 text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    {isEditing ? (
-                                                        <>
-                                                            <button onClick={() => setEditingUser(null)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"><X size={16} /></button>
-                                                            <button onClick={() => handleSave(user.id)} className="p-2 bg-emerald-900/20 hover:bg-emerald-900/40 rounded-lg text-emerald-400 hover:text-emerald-300 transition-colors"><Save size={16} /></button>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <button onClick={() => handleEdit(user)} className="p-2 hover:bg-blue-900/10 rounded-lg text-slate-500 hover:text-blue-400 transition-colors"><Edit2 size={16} /></button>
-                                                            {currentUser.id !== user.id && (
-                                                                <button onClick={() => confirmDelete(user)} className="p-2 hover:bg-red-900/10 rounded-lg text-slate-500 hover:text-red-400 transition-colors"><Trash2 size={16} /></button>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : (
-                    // --- INVITES TABLE ---
-                    <div className="overflow-x-auto">
-                        <table className="w-full whitespace-nowrap">
-                            <thead className="bg-[#020617]/50 border-b border-blue-900/30">
-                                <tr>
-                                    <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase">Email Convidado</th>
-                                    <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase">Função Prevista</th>
-                                    <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase">Ministério</th>
-                                    <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase">Status</th>
-                                    <th className="text-right py-4 px-6 text-xs font-bold text-slate-400 uppercase">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-blue-900/10">
-                                {filteredInvites.map(invite => {
-                                    // Check if user already joined
-                                    const isJoined = users.some(u => u.email?.toLowerCase() === invite.email?.toLowerCase());
+            {/* Users Table */}
+            <div className="bg-[#0f172a] border border-blue-900/30 rounded-2xl overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead className="bg-[#020617] border-b border-blue-900/30">
+                            <tr>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Usuário</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Ministérios</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Função</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-blue-900/10">
+                            {filteredUsers.map(user => {
+                                const isSuperAdminRow = user.role === 'superadmin';
+                                const isCurrentUser = user.id === currentUser?.id;
 
-                                    return (
-                                        <tr key={invite.id} className="hover:bg-white/5 transition-colors">
-                                            <td className="py-4 px-6">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 border border-slate-700 shrink-0">
-                                                        <Mail size={14} />
-                                                    </div>
-                                                    <span className="font-medium text-slate-200">{invite.email}</span>
+                                return (
+                                    <tr key={user.id} className="hover:bg-blue-900/5 transition-colors group">
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 flex items-center justify-center text-white font-bold text-sm">
+                                                    {user.name?.charAt(0)}
                                                 </div>
-                                            </td>
-                                            <td className="py-4 px-6">
-                                                <span className="text-xs uppercase font-bold text-slate-500 border border-slate-700 px-2 py-1 rounded-lg">
-                                                    {invite.role === 'admin' ? 'ADMIN' : invite.role === 'leader' ? 'LÍDER' : 'MEMBRO'}
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-6 text-slate-400 text-sm">
-                                                {invite.ministry?.name || '-'}
-                                            </td>
-                                            <td className="py-4 px-6">
-                                                {isJoined ? (
-                                                    <span className="inline-flex items-center gap-1 text-emerald-400 text-xs font-bold bg-emerald-900/20 px-2 py-1 rounded-full border border-emerald-500/20">
-                                                        <CheckCircle size={12} /> Cadastrado
-                                                    </span>
+                                                <div>
+                                                    <div className="font-bold text-white">{user.name}</div>
+                                                    <div className="text-sm text-slate-500">{user.email}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-wrap gap-1">
+                                                {user.ministries && user.ministries.length > 0 ? (
+                                                    user.ministries.map(m => (
+                                                        <span key={m.id} className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded-md border border-slate-700">
+                                                            {m.name}
+                                                        </span>
+                                                    ))
                                                 ) : (
-                                                    <span className="inline-flex items-center gap-1 text-amber-400 text-xs font-bold bg-amber-900/20 px-2 py-1 rounded-full border border-amber-500/20">
-                                                        <Clock size={12} /> Pendente
-                                                    </span>
+                                                    <span className="text-slate-600 italic text-sm">Nenhum</span>
                                                 )}
-                                            </td>
-                                            <td className="py-4 px-6 text-right">
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {getRoleBadge(user.role)}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {user.is_active ? (
+                                                <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
+                                                    <CheckCircle size={16} /> Ativo
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2 text-amber-400 text-sm font-medium">
+                                                    <Clock size={16} /> Pendente
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex items-center justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
                                                 <button
-                                                    onClick={() => confirmDeleteInvite(invite.id, invite.email)}
-                                                    className="p-2 hover:bg-red-900/10 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
-                                                    title="Revogar Convite"
+                                                    onClick={() => openEditModal(user)}
+                                                    className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                                    title="Editar Detalhes"
                                                 >
-                                                    <Trash2 size={16} />
+                                                    <Edit2 size={18} />
                                                 </button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                                {filteredInvites.length === 0 && (
-                                    <tr>
-                                        <td colSpan="5" className="py-10 text-center text-slate-500">
-                                            Nenhum convite encontrado.
+
+                                                {!isSuperAdminRow && !isCurrentUser && (
+                                                    <button
+                                                        onClick={() => setDeleteModal({ isOpen: true, user })}
+                                                        className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                                        title="Remover Usuário"
+                                                    >
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+                {filteredUsers.length === 0 && (
+                    <div className="text-center py-12 text-slate-500">
+                        Nenhum usuário encontrado.
                     </div>
                 )}
             </div>
 
-            <div className="bg-blue-900/10 border border-blue-500/20 p-4 rounded-xl flex items-start gap-3">
-                <Shield className="text-blue-400 shrink-0 mt-0.5" size={20} />
-                <div className="text-sm text-blue-200">
-                    <p className="font-bold mb-1">Nota sobre Segurança</p>
-                    <p className="opacity-80">
-                        O cadastro está operando em <strong>Modo Fechado (Whitelist)</strong>. Novos usuários só conseguem se registrar se o email estiver na lista de convites acima.
-                        Ao criar um convite, o email é pré-autorizado para a função e ministério escolhidos.
-                    </p>
+            {/* CREATE MODAL */}
+            <Modal
+                isOpen={createModalOpen}
+                onClose={() => setCreateModalOpen(false)}
+                title="Novo Usuário"
+                type="default"
+                showCancel={false} // Disable default footer actions as we have custom
+            >
+                <div className="space-y-4">
+                    <Input
+                        label="Nome Completo"
+                        icon={User}
+                        value={createForm.name}
+                        onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                        placeholder="Ex: João Silva"
+                    />
+                    <Input
+                        label="Email"
+                        icon={Mail}
+                        type="email"
+                        value={createForm.email}
+                        onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                        placeholder="joao@exemplo.com"
+                    />
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <MultiSelect
+                                label="Ministérios"
+                                options={ministryOptions}
+                                value={createForm.ministry_ids}
+                                onChange={(newVal) => setCreateForm({ ...createForm, ministry_ids: newVal })}
+                                placeholder="Selecione..."
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Função</label>
+                            <div className="relative">
+                                <select
+                                    value={createForm.role}
+                                    onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
+                                    className="w-full bg-[#020617] border border-blue-900/30 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer"
+                                >
+                                    <option value="member">Membro</option>
+                                    <option value="leader">Líder</option>
+                                    <option value="admin">Admin</option>
+                                    {currentUser?.role === 'superadmin' && <option value="superadmin">SuperAdmin</option>}
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">▼</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <Input
+                        label="Senha Temporária"
+                        icon={Key}
+                        value={createForm.temp_password}
+                        onChange={(e) => setCreateForm({ ...createForm, temp_password: e.target.value })}
+                        placeholder="Mínimo 6 caracteres"
+                    />
+
+                    <div className="flex justify-end pt-4 gap-3">
+                        <button
+                            onClick={() => setCreateModalOpen(false)}
+                            className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-xl"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={handleCreateUser}
+                            disabled={isSubmitting}
+                            className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            {isSubmitting ? 'Criando...' : 'Criar Usuário'}
+                        </button>
+                    </div>
                 </div>
-            </div>
+            </Modal>
+
+            {/* EDIT MODAL */}
+            <Modal
+                isOpen={editModalOpen}
+                onClose={() => setEditModalOpen(false)}
+                title="Editar Usuário"
+                type="default"
+                showCancel={false} // FIX: Disable default Modal cancel button to avoid duplicate
+            >
+                <div className="space-y-4">
+                    <Input
+                        label="Nome"
+                        value={editForm.name}
+                        onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    />
+                    {/* Email is read-only for editing to avoid auth complexity */}
+                    <div className="opacity-50">
+                        <Input
+                            label="Email (Não editável)"
+                            value={editForm.email}
+                            disabled={true}
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <MultiSelect
+                                label="Ministérios"
+                                options={ministryOptions}
+                                value={editForm.ministry_ids}
+                                onChange={(newVal) => setEditForm({ ...editForm, ministry_ids: newVal })}
+                                placeholder="Selecione..."
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Função</label>
+                            <div className="relative">
+                                <select
+                                    value={editForm.role}
+                                    onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                                    className="w-full bg-[#020617] border border-blue-900/30 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer"
+                                    disabled={editForm.role === 'superadmin' && currentUser?.role !== 'superadmin'}
+                                >
+                                    <option value="member">Membro</option>
+                                    <option value="leader">Líder</option>
+                                    <option value="admin">Admin</option>
+                                    {currentUser?.role === 'superadmin' && <option value="superadmin">SuperAdmin</option>}
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">▼</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end pt-4 gap-3">
+                        <button
+                            onClick={() => setEditModalOpen(false)}
+                            className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-xl"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={handleUpdateUser}
+                            disabled={isSubmitting}
+                            className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            {isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* SUCCESS CREDENTIALS MODAL */}
+            <Modal
+                isOpen={successModalOpen}
+                onClose={() => setSuccessModalOpen(false)}
+                title="Usuário Criado com Sucesso"
+                type="default"
+            >
+                <div className="text-center space-y-6">
+                    <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto">
+                        <CheckCircle size={32} className="text-emerald-500" />
+                    </div>
+
+                    <p className="text-slate-300">
+                        Copie as credenciais abaixo e envie para o novo usuário.
+                    </p>
+
+                    <div className="bg-[#020617] border border-blue-900/30 rounded-xl p-4 space-y-4 text-left">
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase">Email</label>
+                            <div className="flex justify-between items-center mt-1">
+                                <code className="text-blue-300 font-mono">{generatedCredentials?.email}</code>
+                                <button onClick={() => copyToClipboard(generatedCredentials?.email)} className="text-slate-500 hover:text-white p-1">
+                                    <Copy size={16} />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="h-px bg-slate-800"></div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase">Senha Temporária</label>
+                            <div className="flex justify-between items-center mt-1">
+                                <code className="text-emerald-300 font-mono text-lg">{generatedCredentials?.password}</code>
+                                <button onClick={() => copyToClipboard(generatedCredentials?.password)} className="text-slate-500 hover:text-white p-1">
+                                    <Copy size={16} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-amber-900/20 border border-amber-500/20 p-4 rounded-xl text-left flex gap-3">
+                        <AlertTriangle className="text-amber-500 shrink-0" size={20} />
+                        <p className="text-xs text-amber-200">
+                            Essa senha só será exibida uma vez. O usuário será solicitado a trocá-la no primeiro login.
+                        </p>
+                    </div>
+
+                    <button
+                        onClick={() => setSuccessModalOpen(false)}
+                        className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl"
+                    >
+                        Fechar
+                    </button>
+                </div>
+            </Modal>
+
+            {/* DELETE MODAL */}
+            <Modal
+                isOpen={deleteModal.isOpen}
+                onClose={() => setDeleteModal({ isOpen: false, user: null })}
+                onConfirm={handleDelete}
+                title="Confirmar Exclusão"
+                message={`Tem certeza que deseja remover "${deleteModal.user?.name}"? Essa ação é irreversível.`}
+                confirmText="Excluir Usuário"
+                type="danger"
+            />
         </div>
     );
 }

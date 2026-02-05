@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 
 const AuthContext = createContext({});
@@ -17,8 +17,11 @@ export function AuthProvider({ children }) {
     const [session, setSession] = useState(null);
 
     useEffect(() => {
+        let isMounted = true;
+
         // Check active session
         supabase.auth.getSession().then(({ data: { session } }) => {
+            if (!isMounted) return;
             setSession(session);
             if (session?.user) {
                 loadUserProfile(session.user.id);
@@ -29,6 +32,7 @@ export function AuthProvider({ children }) {
 
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (!isMounted) return;
             setSession(session);
             if (session?.user) {
                 loadUserProfile(session.user.id);
@@ -38,23 +42,32 @@ export function AuthProvider({ children }) {
             }
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            isMounted = false;
+            subscription.unsubscribe();
+        };
     }, []);
 
     const loadUserProfile = async (userId) => {
+        if (!userId) return;
+
         try {
+            // FIX: Explicitly specify !ministry_id to avoid ambiguity with user_ministries table
             const { data, error } = await supabase
                 .from('users')
-                .select('*, ministry:ministries(id, name)')
+                .select('*, ministry:ministries!ministry_id(id, name)')
                 .eq('id', userId)
                 .single();
 
-            if (error) throw error;
-
-            setUser(data);
+            if (error) {
+                console.error('Error loading user profile:', error);
+                // Mantenha o usuário anterior se existir para evitar redirecionamentos agressivos
+                setUser(prev => prev);
+            } else {
+                setUser(data);
+            }
         } catch (error) {
-            console.error('Error loading user profile:', error);
-            setUser(null);
+            console.error('Unexpected error loading user profile:', error);
         } finally {
             setLoading(false);
         }
@@ -70,10 +83,9 @@ export function AuthProvider({ children }) {
 
             if (error) throw error;
 
-            // Verificar se usuário está ativo
             const { data: userData, error: userError } = await supabase
                 .from('users')
-                .select('is_active')
+                .select('is_active, must_change_password')
                 .eq('id', data.user.id)
                 .single();
 
@@ -81,63 +93,19 @@ export function AuthProvider({ children }) {
 
             if (!userData?.is_active) {
                 await supabase.auth.signOut();
-                throw new Error('Conta não ativada. Use o código de ativação recebido para ativar sua conta.');
+                throw new Error('Sua conta está desativada. Entre em contato com o administrador.');
             }
 
-            // Load profile
             if (data.session?.user) {
                 await loadUserProfile(data.session.user.id);
             }
-            return data;
+
+            return {
+                ...data,
+                mustChangePassword: userData?.must_change_password || false
+            };
         } catch (error) {
             setLoading(false);
-            throw error;
-        }
-    };
-
-    /**
-     * Ativa conta de usuário usando código de ativação
-     * Usado no primeiro acesso
-     */
-    const activateAccount = async (email, code, password, name) => {
-        try {
-            // 1. Validar código e email
-            const { data: validationResult, error: validationError } = await supabase
-                .rpc('activate_user_account', {
-                    p_email: email.toLowerCase().trim(),
-                    p_code: code.toUpperCase().trim()
-                });
-
-            if (validationError) throw validationError;
-
-            if (!validationResult?.success) {
-                throw new Error(validationResult?.error || 'Código inválido ou já utilizado');
-            }
-
-            const userId = validationResult.user_id;
-
-            // 2. Criar usuário no Supabase Auth
-            const { data: authData, error: authError } = await supabase.auth.signUp({
-                email: email.toLowerCase().trim(),
-                password,
-                options: {
-                    data: { name }
-                }
-            });
-
-            if (authError) throw authError;
-
-            // 3. Atualizar nome do usuário na tabela users
-            const { error: updateError } = await supabase
-                .from('users')
-                .update({ name })
-                .eq('id', userId);
-
-            if (updateError) console.error('Error updating name:', updateError);
-
-            return authData;
-        } catch (error) {
-            console.error('[AuthContext] Activation error:', error);
             throw error;
         }
     };
@@ -163,16 +131,18 @@ export function AuthProvider({ children }) {
         if (error) throw error;
     };
 
-    const value = {
+    const value = useMemo(() => ({
         user,
         session,
         loading,
+        isAdmin: user?.role === 'admin' || user?.role === 'superadmin',
+        isSuperAdmin: user?.role === 'superadmin',
         signIn,
         signOut,
-        activateAccount,
         resetPassword,
         updatePassword,
-    };
+        refreshProfile: () => loadUserProfile(session?.user?.id)
+    }), [user, session, loading]);
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
