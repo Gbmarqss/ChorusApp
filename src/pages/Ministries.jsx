@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { Plus, Trash2, Shield, Users, AlertTriangle, Save, X, CheckCircle } from 'lucide-react';
-import ConfirmModal from '../components/ConfirmModal';
+import Modal from '../components/ui/Modal';
 
 // Simple Toast Component for Notifications
 const Toast = ({ message, type = 'success', onClose }) => (
@@ -32,9 +32,10 @@ export default function Ministries() {
 
     const loadMinistries = async () => {
         try {
+            // FIX: Explicitly specify !ministry_id to avoid ambiguity with user_ministries table
             const { data, error } = await supabase
                 .from('ministries')
-                .select('*, users(count)');
+                .select('*, users!ministry_id(count)');
 
             if (error) throw error;
             // Force strict sync: no hardcoded fallbacks
@@ -106,7 +107,7 @@ export default function Ministries() {
         <div className="space-y-8 animate-fade-in-up pb-20">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-            <ConfirmModal
+            <Modal
                 isOpen={modal.isOpen}
                 onClose={() => setModal({ ...modal, isOpen: false })}
                 onConfirm={modal.onConfirm}
