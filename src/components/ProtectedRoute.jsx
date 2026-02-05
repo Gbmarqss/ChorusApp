@@ -23,8 +23,13 @@ export default function ProtectedRoute({ children, requireAdmin = false }) {
     }
 
     // Check admin requirement
-    if (requireAdmin && user.role !== 'admin') {
+    if (requireAdmin && user.role !== 'admin' && user.role !== 'superadmin') {
         return <Navigate to="/" replace />;
+    }
+
+    // Force password change if required
+    if (user.must_change_password && window.location.pathname !== '/change-password') {
+        return <Navigate to="/change-password" replace />;
     }
 
     return children ? children : <Outlet />;

@@ -5,8 +5,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './components/ui/Toast';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
-import Register from './pages/Register';
 import FirstAccess from './pages/FirstAccess';
+import ChangePassword from './pages/ChangePassword';
 import ForgotPassword from './pages/ForgotPassword';
 import Profile from './pages/Profile';
 import UsersPage from './pages/Users';
@@ -16,6 +16,7 @@ import EditPublishedSchedule from './pages/EditPublishedSchedule';
 import PublicScheduleView from './pages/PublicScheduleView';
 import Ministries from './pages/Ministries';
 import History from './pages/History';
+import Settings from './pages/Settings';
 import TeamManager from './TeamManager';
 import Home from './Home';
 import Layout from './components/Layout';
@@ -38,9 +39,7 @@ function Dashboard() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [ministerios, setMinisterios] = useState(Object.keys(MINISTERIOS_DEFAULT));
-  // TEMA NAVY FORÇADO
-  // const [theme, setTheme] = useState(...) -> REMOVIDO
-  const isDark = true; // Sempre modo escuro/navy
+  const isDark = true; 
   const [escala, setEscala] = useState([]);
   const [disponiveis, setDisponiveis] = useState({});
   const [adicionaisManuais, setAdicionaisManuais] = useState([]);
@@ -53,11 +52,10 @@ function Dashboard() {
   const [showManualAddModal, setShowManualAddModal] = useState(false);
   const [novoNome, setNovoNome] = useState("");
   const [isEditing, setIsEditing] = useState(true);
-  const [exportFilter, setExportFilter] = useState(""); // Novo filtro de pessoa
-  const [showPreEscala, setShowPreEscala] = useState(false); // Novo: Modal de Pré-Escala
-  const [showNovaEscalaConfirm, setShowNovaEscalaConfirm] = useState(false); // Confirmação visual para Nova Escala
+  const [exportFilter, setExportFilter] = useState(""); 
+  const [showPreEscala, setShowPreEscala] = useState(false); 
+  const [showNovaEscalaConfirm, setShowNovaEscalaConfirm] = useState(false); 
 
-  // Team State - Lazy Initialization para garantir que carregue ANTES do primeiro efeito de salvar
   const [showTeamManager, setShowTeamManager] = useState(false);
   const [team, setTeam] = useState(() => {
     const saved = localStorage.getItem('webshift-team');
@@ -68,7 +66,6 @@ function Dashboard() {
     ];
   });
 
-  // Efeitos e Funções...
   useEffect(() => {
     const savedEscala = localStorage.getItem('webshift-escala');
     const savedDisponiveis = localStorage.getItem('webshift-disponiveis');
@@ -79,46 +76,39 @@ function Dashboard() {
     if (savedAdicionais) setAdicionaisManuais(JSON.parse(savedAdicionais));
   }, []);
 
-  // Auto-open TeamManager when accessing /equipe route
   useEffect(() => {
     if (location.pathname === '/equipe') {
       setShowTeamManager(true);
     }
   }, [location.pathname]);
 
-  // Salva automaticamente no localStorage
   useEffect(() => {
     if (escala.length > 0) localStorage.setItem('webshift-escala', JSON.stringify(escala));
     if (Object.keys(disponiveis).length > 0) localStorage.setItem('webshift-disponiveis', JSON.stringify(disponiveis));
     localStorage.setItem('webshift-adicionais', JSON.stringify(adicionaisManuais));
     localStorage.setItem('webshift-team', JSON.stringify(team));
   }, [escala, disponiveis, adicionaisManuais, team]);
-  // useEffect(() => { localStorage.setItem('webshift-theme', theme); ... }, [theme]); -> REMOVIDO
+
   const contagemEscalas = useMemo(() => { const counts = {}; escala.forEach(slot => { if (slot.Voluntario !== "Não designado") counts[slot.Voluntario] = (counts[slot.Voluntario] || 0) + 1; }); return counts; }, [escala]);
   const LIMITE_AVISO = 5;
-  // const toggleTheme = ... -> REMOVIDO
+  
   const showToast = (message, type = 'success') => { setToast({ show: true, message, type }); setTimeout(() => setToast({ ...toast, show: false }), 3000); };
   const handleFileUpload = (e) => { if (e.target.files[0]) setFile(e.target.files[0]); };
+  
   const handleGerar = async () => {
     if (!file) return showToast("Selecione um arquivo!", "error");
     setLoading(true);
     try {
-      // Limpa pré-escala anterior ao gerar nova
       localStorage.removeItem('chorus_pre_escala');
-
       const df = await lerPlanilha(file);
       const { rascunho, disponiveis: disp, error, warnings } = gerarRascunho(df, ministerios, team);
       if (error) throw new Error(error);
-
       setEscala(rascunho);
       setDisponiveis(disp);
       setStep(2);
       verificarConflitos(rascunho);
-
       if (warnings && warnings.length > 0) {
         showToast(`${warnings.length} correções automáticas aplicadas!`, "warning");
-        console.warn("Generation Warnings:", warnings);
-        setToast({ show: true, message: `${warnings.length} correções (veja console)`, type: 'warning' });
       } else {
         showToast("Escala gerada com sucesso!");
       }
@@ -128,10 +118,11 @@ function Dashboard() {
       setLoading(false);
     }
   };
+
   const copyShareLink = () => { if (escala.length === 0) return showToast("Gere uma escala primeiro!", "error"); const jsonString = JSON.stringify(escala); const compressed = LZString.compressToEncodedURIComponent(jsonString); const url = `${window.location.origin}/share?d=${compressed}`; navigator.clipboard.writeText(url).then(() => { showToast("Link copiado!", "success"); }); };
   const openExportModal = (type) => { if (conflitos.length > 0) return showToast("Resolva conflitos!", "error"); setExportType(type); setShowExportModal(true); };
+  
   const confirmExport = () => {
-    // 1. Filtra por Ministerio
     let filtrada = escala.filter(slot => {
       let area = slot.AreaOriginal || 'OUTROS';
       if (slot.Funcao.includes('Fotografo') || slot.Funcao.includes('Suporte')) area = 'TAKE';
@@ -141,18 +132,8 @@ function Dashboard() {
       if (slot.Funcao.includes('ILUMINAÇÃO')) area = 'ILUMINAÇÃO';
       return ministeriosExportacao.includes(area);
     });
-
-    // 2. Filtra por Pessoa
-    if (exportFilter) {
-      filtrada = filtrada.filter(slot => slot.Voluntario === exportFilter);
-    }
-
-    if (filtrada.length === 0) {
-      showToast("Nada para exportar com esses filtros.", "error");
-      // Não fecha o modal pra dar chance de mudar o filtro
-      return;
-    }
-
+    if (exportFilter) filtrada = filtrada.filter(slot => slot.Voluntario === exportFilter);
+    if (filtrada.length === 0) { showToast("Nada para exportar com esses filtros.", "error"); return; }
     if (exportType === 'pdf') exportarPDF(filtrada);
     if (exportType === 'excel') exportarExcel(filtrada);
     if (exportType === 'ics') exportarICS(filtrada);
@@ -167,16 +148,11 @@ function Dashboard() {
   const itensFiltrados = escala.filter(item => { const termo = normalizeText(filtro); return normalizeText(item.Data).includes(termo) || normalizeText(item.Voluntario).includes(termo) || normalizeText(item.Funcao).includes(termo); });
   const escalaAgrupada = Object.groupBy ? Object.groupBy(itensFiltrados, ({ Data }) => Data) : itensFiltrados.reduce((acc, item) => { (acc[item.Data] = acc[item.Data] || []).push(item); return acc; }, {});
 
-  const bgClass = 'bg-[#020617] text-white'; // Navy Base
-  const cardClass = 'bg-[#0f172a] border-blue-900/30 shadow-2xl'; // Navy Card
-
-
+  const bgClass = 'bg-[#020617] text-white'; 
+  const cardClass = 'bg-[#0f172a] border-blue-900/30 shadow-2xl'; 
 
   return (
     <div className={`w-full min-h-screen flex flex-col transition-colors duration-300 ${bgClass} font-sans`}>
-      {/* ... Resto do Main e Modais (igual ao anterior) ... */}
-
-      {/* ... Resto do Main e Modais (igual ao anterior) ... */}
       <main className="flex-1 w-full px-3 md:px-8 py-6 max-w-[1920px] mx-auto">
         {step === 1 && (
           <div className="w-full h-full flex justify-center items-start pt-8 md:pt-12 animate-fade-in-up">
@@ -293,7 +269,6 @@ function Dashboard() {
                 </div>
               ))}
             </div>
-            {Object.keys(escalaAgrupada).length === 0 && <div className="text-center py-20 flex flex-col items-center opacity-50 animate-pulse"><Search size={48} className="mb-4 text-gray-400" /><p className="text-xl font-medium text-gray-500">Nenhum resultado para "{filtro}"</p></div>}
           </div>
         )}
       </main>
@@ -306,8 +281,6 @@ function Dashboard() {
               <h3 className="text-xl font-bold text-white">Exportar</h3>
               <button onClick={() => setShowExportModal(false)}><X size={24} className="text-slate-400 hover:text-white" /></button>
             </div>
-
-            {/* Volunteer Filter */}
             <div className="mb-6">
               <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-widest">Filtrar por Pessoa (Opcional)</label>
               <select
@@ -321,7 +294,6 @@ function Dashboard() {
                 ))}
               </select>
             </div>
-
             <div className="bg-[#020617]/50 p-4 rounded-xl border border-blue-900/20 mb-6">
               <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-widest">Áreas</label>
               <div className="grid grid-cols-2 gap-3">
@@ -333,7 +305,6 @@ function Dashboard() {
                 ))}
               </div>
             </div>
-
             <button onClick={confirmExport} className="w-full py-4 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all transform hover:scale-[1.02]">
               {exportFilter ? `Exportar para ${exportFilter.split(' ')[0]}` : 'Exportar Tudo'}
             </button>
@@ -343,28 +314,8 @@ function Dashboard() {
       {toast.show && <div className={`fixed bottom-8 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-2xl font-bold animate-bounce-in z-[70] flex items-center gap-3 transition-all whitespace-nowrap border ${toast.type === 'error' ? 'bg-red-900/90 border-red-700 text-white' : 'bg-blue-900/90 border-blue-700 text-white'}`}>{toast.type === 'success' ? <CheckCircle size={20} /> : <Lock size={20} />}<span className="text-sm">{toast.message}</span></div>}
       <footer className="py-6 text-center text-xs text-slate-600 font-medium"><p>ChorusApp v{APP_VERSION} • {new Date().getFullYear()}</p></footer>
 
-      {showTeamManager && (
-        <TeamManager
-          team={team}
-          onUpdate={setTeam}
-          onClose={() => setShowTeamManager(false)}
-          isDark={isDark}
-        />
-      )}
-
-      {showPreEscala && (
-        <PreEscalaManager
-          escala={escala}
-          disponiveis={disponiveis}
-          onClose={() => setShowPreEscala(false)}
-          onPublish={(escalaFinal) => {
-            showToast('Escala final publicada com sucesso!', 'success');
-            setShowPreEscala(false);
-            // Aqui você pode adicionar lógica adicional, como salvar no backend
-          }}
-          isDark={isDark}
-        />
-      )}
+      {showTeamManager && <TeamManager team={team} onUpdate={setTeam} onClose={() => setShowTeamManager(false)} isDark={isDark} />}
+      {showPreEscala && <PreEscalaManager escala={escala} disponiveis={disponiveis} onClose={() => setShowPreEscala(false)} onPublish={(escalaFinal) => { showToast('Escala final publicada com sucesso!', 'success'); setShowPreEscala(false); }} isDark={isDark} />}
     </div>
   );
 }
@@ -373,7 +324,7 @@ const ExportBtn = ({ icon, label, onClick, color = 'blue' }) => {
   const colorClasses = {
     blue: "bg-[#0f172a] text-blue-200 hover:bg-blue-900/30 hover:text-blue-100 border-blue-900/40 hover:border-blue-500",
     green: "bg-[#0f172a] text-green-200 hover:bg-green-900/30 hover:text-green-100 border-green-900/40 hover:border-green-500",
-    purple: "bg-[#0f172a] text-purple-200 hover:bg-purple-900/30 hover:text-purple-100 border-purple-900/40 hover:border-purple-500",
+    purple: "bg-[#0f172a] text-purple-200 hover:bg-purple-900/30 hover:text-purple-100 border-blue-900/40 hover:border-purple-500",
   };
   const selectedClass = colorClasses[color] || colorClasses.blue;
   return <button onClick={onClick} className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm hover:shadow-md border ${selectedClass} whitespace-nowrap`}>{icon} {label}</button>;
@@ -387,7 +338,6 @@ function App() {
           <Route element={<Layout />}>
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
             <Route path="/primeiro-acesso" element={<FirstAccess />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
 
@@ -398,13 +348,14 @@ function App() {
             {/* Protected Routes */}
             <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
             <Route path="/wizard" element={<ProtectedRoute><ScaleWizard /></ProtectedRoute>} />
             <Route path="/pre-scale/:id" element={<ProtectedRoute><PreScaleEditor /></ProtectedRoute>} />
             <Route path="/schedules/:id/edit" element={<ProtectedRoute><EditPublishedSchedule /></ProtectedRoute>} />
             <Route path="/ministries" element={<ProtectedRoute requireAdmin><Ministries /></ProtectedRoute>} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/equipe" element={<ProtectedRoute requireAdmin><UsersPage /></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute requireAdmin><UsersPage /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute requireAdmin><Settings /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/historico" element={<History />} />
 
             {/* Fallback */}

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { MINISTERIOS_DEFAULT } from '../logic';
 import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal';
+import Modal from '../components/ui/Modal';
 
 export default function PreScaleEditor() {
     const { id } = useParams();
@@ -54,9 +54,10 @@ export default function PreScaleEditor() {
             if (minError) throw minError;
 
             // 3. Fetch Existing Approvals
+            // FIX: Explicitly specify foreign keys to avoid PGRST201 ambiguity
             const { data: apps, error: appError } = await supabase
                 .from('approvals')
-                .select('*, ministry:ministries(name), approver:users(name)')
+                .select('*, ministry:ministries!ministry_id(name), approver:users!approved_by(name)')
                 .eq('pre_schedule_id', id);
 
             if (appError) throw appError;
@@ -89,9 +90,10 @@ export default function PreScaleEditor() {
             if (error) throw error;
 
             // Refresh approvals
+            // FIX: Explicitly specify foreign keys to avoid PGRST201 ambiguity
             const { data: apps } = await supabase
                 .from('approvals')
-                .select('*, ministry:ministries(name), approver:users(name)')
+                .select('*, ministry:ministries!ministry_id(name), approver:users!approved_by(name)')
                 .eq('pre_schedule_id', id);
 
             setApprovals(apps);
@@ -261,7 +263,7 @@ export default function PreScaleEditor() {
         <div className="min-h-screen bg-[#020617] text-white flex flex-col h-screen overflow-hidden">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-            <ConfirmModal
+            <Modal
                 isOpen={modal.isOpen}
                 onClose={() => setModal({ ...modal, isOpen: false })}
                 onConfirm={modal.onConfirm}

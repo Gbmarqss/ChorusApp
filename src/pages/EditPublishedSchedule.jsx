@@ -7,7 +7,7 @@ import {
     Eye, Edit2, Calendar, Lock, ArrowRightLeft
 } from 'lucide-react';
 import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal';
+import Modal from '../components/ui/Modal';
 
 export default function EditPublishedSchedule() {
     const { id } = useParams();

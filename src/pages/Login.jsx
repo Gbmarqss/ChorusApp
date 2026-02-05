@@ -25,8 +25,14 @@ export default function Login() {
         setLoading(true);
 
         try {
-            await signIn(email, password);
-            navigate('/');
+            const result = await signIn(email, password);
+
+            // Verificar se precisa trocar senha
+            if (result.mustChangePassword) {
+                navigate('/change-password');
+            } else {
+                navigate('/');
+            }
         } catch (err) {
             console.error('Login error:', err);
             if (err.message.includes('Invalid login credentials')) {
@@ -131,20 +137,11 @@ export default function Login() {
                         </div>
                     </div>
 
-                    {/* First Access Button */}
-                    <Link
-                        to="/primeiro-acesso"
-                        className="w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2 border border-slate-700 hover:border-slate-600"
-                    >
-                        <UserPlus size={20} />
-                        Primeiro Acesso
-                    </Link>
-
                     {/* Footer */}
-                    <div className="mt-6 text-center">
+                    <div className="mt-6 text-center space-y-4">
                         <Link
                             to="/forgot-password"
-                            className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                            className="text-sm text-blue-400 hover:text-blue-300 transition-colors block"
                         >
                             Esqueceu sua senha?
                         </Link>

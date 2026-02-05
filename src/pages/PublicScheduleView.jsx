@@ -2,13 +2,16 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { Calendar, Printer, Share2, AlertTriangle, Music2, ArrowRightLeft, Clock, MapPin } from 'lucide-react';
+import { Calendar, Printer, Share2, AlertTriangle, Music2, ArrowRightLeft, Clock, MapPin, Filter, UserCheck, LayoutGrid } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function PublicScheduleView() {
     const { id } = useParams();
+    const { user } = useAuth(); // Get current user for personalization
     const [schedule, setSchedule] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [myView, setMyView] = useState(false); // Toggle state
 
     useEffect(() => {
         loadSchedule();
@@ -38,7 +41,6 @@ export default function PublicScheduleView() {
 
     const handleShare = () => {
         navigator.clipboard.writeText(window.location.href);
-        // Simple visual feedback could be added here
         const btn = document.getElementById('share-btn');
         if (btn) {
             const originalText = btn.innerHTML;
@@ -65,8 +67,13 @@ export default function PublicScheduleView() {
         </div>
     );
 
+    // FILTER LOGIC
+    const filteredData = myView && user 
+        ? schedule.data.filter(item => item.Voluntario === user.name)
+        : schedule.data;
+
     // Grouping logic
-    const groupedData = schedule.data.reduce((acc, item) => {
+    const groupedData = filteredData.reduce((acc, item) => {
         if (!acc[item.Data]) acc[item.Data] = [];
         acc[item.Data].push(item);
         return acc;
@@ -84,7 +91,7 @@ export default function PublicScheduleView() {
                 </div>
 
                 <div className="max-w-7xl mx-auto px-6 py-12 relative z-10">
-                    <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+                    <div className="flex flex-col lg:flex-row items-center justify-between gap-8">
                         <div className="flex items-center gap-6">
                             <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/50 transform rotate-3">
                                 <Music2 className="text-white drop-shadow-md" size={40} />
@@ -97,27 +104,43 @@ export default function PublicScheduleView() {
                                     <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-900/20 border border-blue-500/20 text-blue-300">
                                         <Clock size={14} /> Publicado em {new Date(schedule.published_at).toLocaleDateString()}
                                     </span>
-                                    <span className="hidden md:flex items-center gap-1.5">
-                                        <MapPin size={14} /> ChorusApp Oficial
-                                    </span>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-3 w-full md:w-auto">
-                            <button
-                                id="share-btn"
-                                onClick={handleShare}
-                                className="flex-1 md:flex-none py-3 px-6 rounded-xl bg-[#1e293b] hover:bg-[#334155] text-slate-200 font-bold transition-all border border-slate-700 flex items-center justify-center gap-2 group"
-                            >
-                                <Share2 size={18} className="group-hover:scale-110 transition-transform" />
-                            </button>
-                            <button
-                                onClick={handlePrint}
-                                className="flex-1 md:flex-none py-3 px-8 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all shadow-lg shadow-blue-900/30 hover:scale-105 flex items-center justify-center gap-2"
-                            >
-                                <Printer size={18} /> Imprimir Escala
-                            </button>
+                        {/* Actions Toolbar */}
+                        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+                            {/* Personal Filter Toggle */}
+                            {user && (
+                                <button
+                                    onClick={() => setMyView(!myView)}
+                                    className={`
+                                        w-full sm:w-auto py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border
+                                        ${myView 
+                                            ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/30' 
+                                            : 'bg-[#1e293b] border-slate-700 text-slate-300 hover:bg-[#334155]'}
+                                    `}
+                                >
+                                    {myView ? <UserCheck size={18} /> : <LayoutGrid size={18} />}
+                                    {myView ? 'Minha Escala' : 'Ver Tudo'}
+                                </button>
+                            )}
+
+                            <div className="flex items-center gap-3 w-full sm:w-auto">
+                                <button
+                                    id="share-btn"
+                                    onClick={handleShare}
+                                    className="flex-1 py-3 px-6 rounded-xl bg-[#1e293b] hover:bg-[#334155] text-slate-200 font-bold transition-all border border-slate-700 flex items-center justify-center gap-2 group"
+                                >
+                                    <Share2 size={18} className="group-hover:scale-110 transition-transform" />
+                                </button>
+                                <button
+                                    onClick={handlePrint}
+                                    className="flex-1 py-3 px-6 rounded-xl bg-[#1e293b] hover:bg-[#334155] text-slate-200 font-bold transition-all border border-slate-700 flex items-center justify-center gap-2"
+                                >
+                                    <Printer size={18} />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
