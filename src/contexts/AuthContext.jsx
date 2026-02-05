@@ -52,10 +52,11 @@ export function AuthProvider({ children }) {
         if (!userId) return;
 
         try {
-            // FIX: Explicitly specify !ministry_id to avoid ambiguity with user_ministries table
+            // FIX: Remove ministry join - we now use user_ministries table
+            // The ministry field is no longer needed in the user context
             const { data, error } = await supabase
                 .from('users')
-                .select('*, ministry:ministries!ministry_id(id, name)')
+                .select('*')
                 .eq('id', userId)
                 .single();
 
